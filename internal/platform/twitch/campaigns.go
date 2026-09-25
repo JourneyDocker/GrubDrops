@@ -119,7 +119,12 @@ type campaignDetailsData struct {
 				ID                     string `json:"id"`
 				Name                   string `json:"name"`
 				RequiredMinutesWatched int    `json:"requiredMinutesWatched"`
-				BenefitEdges           []struct {
+				// RequiredSubs > 0 marks a sub-gated tier (e.g. Special
+				// Events "UltraViolet"). Twitch still sends a nonzero
+				// requiredMinutesWatched for these, but watching alone
+				// never earns them (issue #47).
+				RequiredSubs int `json:"requiredSubs"`
+				BenefitEdges []struct {
 					Benefit struct {
 						ID            string `json:"id"`
 						Name          string `json:"name"`
@@ -361,12 +366,20 @@ func (d *discovery) fetchDetails(ctx context.Context, sess platform.Session, cam
 				preconds = append(preconds, pc.ID)
 			}
 		}
+		// Sub-gated drops can't be earned by watching, whatever minutes
+		// Twitch lists. Report them as 0 minutes, the app-wide "not
+		// watch-earnable" marker: the watcher never picks them and
+		// /drops shows them as action-required (issue #47).
+		reqMin := td.RequiredMinutesWatched
+		if td.RequiredSubs > 0 {
+			reqMin = 0
+		}
 		for _, be := range td.BenefitEdges {
 			benefits = append(benefits, platform.DropBenefit{
 				ID:              td.ID, // drop id used for claiming, not benefit reward id
 				CampaignID:      campaignID,
 				Name:            be.Benefit.Name,
-				RequiredMinutes: td.RequiredMinutesWatched,
+				RequiredMinutes: reqMin,
 				ImageURL:        be.Benefit.ImageAssetURL,
 				RewardID:        be.Benefit.ID, // benefit id — matches gameEventDrops
 				Preconditions:   preconds,
