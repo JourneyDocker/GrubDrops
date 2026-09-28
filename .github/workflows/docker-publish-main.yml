@@ -1,0 +1,20 @@
+name: Docker Publish Main
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+permissions:
+  packages: write
+
+jobs:
+  call-reusable-workflow:
+    uses: JourneyDocker/github-workflows/.github/workflows/docker-publish.yml@dev
+    with:
+      tag: main
+      platforms: linux/amd64
+      registry: github
+      file: deploy/Dockerfile.miner
+    secrets: inherit
