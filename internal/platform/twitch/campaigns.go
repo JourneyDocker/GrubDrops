@@ -149,10 +149,24 @@ type inventoryData struct {
 	CurrentUser struct {
 		Inventory struct {
 			DropCampaignsInProgress []struct {
-				ID             string `json:"id"`
+				ID    string `json:"id"`
+				Name  string `json:"name"`
+				EndAt string `json:"endAt"`
+				Game  struct {
+					Name string `json:"name"`
+				} `json:"game"`
+				Allow struct {
+					Channels []struct {
+						Name string `json:"name"`
+					} `json:"channels"`
+				} `json:"allow"`
 				TimeBasedDrops []struct {
-					ID   string `json:"id"`
-					Self struct {
+					ID                     string          `json:"id"`
+					Name                   string          `json:"name"`
+					RequiredMinutesWatched int             `json:"requiredMinutesWatched"`
+					RequiredSubs           int             `json:"requiredSubs"`
+					BenefitEdges           []tvBenefitEdge `json:"benefitEdges"`
+					Self                   struct {
 						CurrentMinutesWatched int    `json:"currentMinutesWatched"`
 						IsClaimed             bool   `json:"isClaimed"`
 						DropInstanceID        string `json:"dropInstanceID"`

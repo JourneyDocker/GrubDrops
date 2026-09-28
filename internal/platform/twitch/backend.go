@@ -68,6 +68,21 @@ var _ platform.AvatarFetcher = (*Backend)(nil)
 // Satisfies platform.CampaignDetailer.
 func (b *Backend) CampaignDetails(ctx context.Context, s platform.Session, campaignID string) ([]platform.DropBenefit, error) {
 	b.c.bind(s)
+	if s.ClientID == ClientTV {
+		// DropCampaignDetails returns dropCampaign:null for TV-client
+		// tokens (#48) — re-derive the campaign's benefits from a fresh
+		// channel-first discovery pass instead.
+		camps, _, err := b.disc.listByChannels(ctx, s, b.chans)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range camps {
+			if c.ID == campaignID {
+				return c.Benefits, nil
+			}
+		}
+		return nil, nil
+	}
 	if strings.ContainsAny(campaignID, "| ") {
 		return nil, nil
 	}
@@ -235,6 +250,19 @@ func (b *Backend) RefreshSession(ctx context.Context, s platform.Session) (platf
 
 func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) ([]platform.Campaign, error) {
 	b.c.bind(s)
+	if s.ClientID == ClientTV {
+		camps, allowed, err := b.disc.listByChannels(ctx, s, b.chans)
+		if err != nil {
+			return nil, err
+		}
+		b.mu.Lock()
+		for cid, logins := range allowed {
+			b.allowedLoginsByCampaign[cid] = logins
+		}
+		b.mu.Unlock()
+		b.ensurePubSub(s)
+		return camps, nil
+	}
 	camps, err := b.disc.listActive(ctx, s)
 	if err != nil {
 		return nil, err
