@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/netutil"
@@ -70,18 +71,16 @@ func (b *Backend) CampaignDetails(ctx context.Context, s platform.Session, campa
 	b.c.bind(s)
 	if s.ClientID == ClientTV {
 		// DropCampaignDetails returns dropCampaign:null for TV-client
-		// tokens (#48) — re-derive the campaign's benefits from a fresh
-		// channel-first discovery pass instead.
-		camps, _, err := b.disc.listByChannels(ctx, s, b.chans)
-		if err != nil {
-			return nil, err
+		// tokens (#48). This runs synchronously inside the /drops HTTP
+		// request, so never do the channel-first walk here: serve the
+		// benefits the last ListActiveCampaigns pass found. A miss or a
+		// stale entry (older than detailsTTL) returns (nil, nil).
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		if b.tvDetails == nil || time.Since(b.tvDetailsAt) >= detailsTTL {
+			return nil, nil
 		}
-		for _, c := range camps {
-			if c.ID == campaignID {
-				return c.Benefits, nil
-			}
-		}
-		return nil, nil
+		return b.tvDetails[campaignID], nil
 	}
 	if strings.ContainsAny(campaignID, "| ") {
 		return nil, nil
@@ -112,6 +111,13 @@ type Backend struct {
 	// reads from this map.
 	mu                      sync.Mutex
 	allowedLoginsByCampaign map[string][]string
+
+	// tvDetails holds the benefits (campaignID -> benefits) found by the
+	// last TV-session channel-first discovery pass, stamped tvDetailsAt.
+	// TV CampaignDetails serves from it (never re-walks inside an HTTP
+	// request); entries older than detailsTTL miss. Guarded by mu.
+	tvDetails   map[string][]platform.DropBenefit
+	tvDetailsAt time.Time
 
 	// PubSub WebSocket — one per backend (per platform-account). Lazy
 	// init on first ListActiveCampaigns once we have the user_id +
@@ -249,10 +255,16 @@ func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) (
 		if err != nil {
 			return nil, err
 		}
+		details := make(map[string][]platform.DropBenefit, len(camps))
+		for _, c := range camps {
+			details[c.ID] = c.Benefits
+		}
 		b.mu.Lock()
 		for cid, logins := range allowed {
 			b.allowedLoginsByCampaign[cid] = logins
 		}
+		b.tvDetails = details
+		b.tvDetailsAt = time.Now()
 		b.mu.Unlock()
 		b.ensurePubSub(s)
 		return camps, nil

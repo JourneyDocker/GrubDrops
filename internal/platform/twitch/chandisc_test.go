@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,26 +147,52 @@ func TestListByChannels_DedupesGamesBySlug(t *testing.T) {
 	assert.Equal(t, 1, dirCalls["rust"], "duplicate slug must issue exactly one DirectoryPage_Game request")
 }
 
-func TestCampaignDetails_TVSession(t *testing.T) {
-	srv := fakeGQL(t, map[string]func(map[string]any) string{
-		"DirectoryPage_Game": func(v map[string]any) string {
+// tvDiscoveryServer serves the canned TV channel-first fixtures and counts
+// every GQL request it receives.
+func tvDiscoveryServer(t *testing.T, calls *int, mu *sync.Mutex) *httptest.Server {
+	count := func(f func(map[string]any) string) func(map[string]any) string {
+		return func(v map[string]any) string {
+			mu.Lock()
+			*calls++
+			mu.Unlock()
+			return f(v)
+		}
+	}
+	return fakeGQL(t, map[string]func(map[string]any) string{
+		"DirectoryPage_Game": count(func(v map[string]any) string {
 			if v["slug"] == "rust" {
 				return dirRust
 			}
 			return `{"data":{"game":{"streams":{"edges":[]}}}}`
-		},
-		"DropsHighlightService_AvailableDrops": func(v map[string]any) string {
+		}),
+		"DropsHighlightService_AvailableDrops": count(func(v map[string]any) string {
 			if v["channelID"] == "c1" {
 				return availAlpha
 			}
 			return `{"data":{"channel":{"viewerDropCampaigns":[]}}}`
-		},
-		"Inventory": func(map[string]any) string { return inventoryTV },
+		}),
+		"Inventory": count(func(map[string]any) string { return inventoryTV }),
 	})
+}
+
+// TestCampaignDetails_TVSession_ServedFromDiscoveryCache: TV CampaignDetails
+// runs inside the /drops HTTP request, so it must never do the channel-first
+// walk itself — it serves the benefits the last ListActiveCampaigns pass
+// found, with zero GQL calls.
+func TestCampaignDetails_TVSession_ServedFromDiscoveryCache(t *testing.T) {
+	var mu sync.Mutex
+	calls := 0
+	srv := tvDiscoveryServer(t, &calls, &mu)
 	defer srv.Close()
 
 	b := newForTest(srv.URL)
 	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust"}}
+	_, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+
+	mu.Lock()
+	calls = 0
+	mu.Unlock()
 
 	benefits, err := b.CampaignDetails(context.Background(), sess, "campA")
 	require.NoError(t, err)
@@ -173,10 +200,55 @@ func TestCampaignDetails_TVSession(t *testing.T) {
 	for _, bn := range benefits {
 		assert.Equal(t, "campA", bn.CampaignID)
 	}
+	benefits, err = b.CampaignDetails(context.Background(), sess, "campB")
+	require.NoError(t, err)
+	require.NotEmpty(t, benefits, "inventory-sourced campaigns are cached too")
+
+	mu.Lock()
+	assert.Equal(t, 0, calls, "CampaignDetails must be served from the discovery cache")
+	mu.Unlock()
+}
+
+// TestCampaignDetails_TVSession_MissReturnsNil: a cache miss (no discovery
+// pass yet, unknown campaign, or stale entry) returns (nil, nil) without
+// touching the network.
+func TestCampaignDetails_TVSession_MissReturnsNil(t *testing.T) {
+	var mu sync.Mutex
+	calls := 0
+	srv := tvDiscoveryServer(t, &calls, &mu)
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust"}}
+
+	benefits, err := b.CampaignDetails(context.Background(), sess, "campA")
+	require.NoError(t, err)
+	assert.Nil(t, benefits, "no discovery pass yet: miss")
+	mu.Lock()
+	assert.Equal(t, 0, calls, "a miss must not trigger the channel-first walk")
+	mu.Unlock()
+
+	_, err = b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+	mu.Lock()
+	calls = 0
+	mu.Unlock()
 
 	benefits, err = b.CampaignDetails(context.Background(), sess, "nonexistent")
 	require.NoError(t, err)
 	assert.Nil(t, benefits)
+
+	// Age the cache past detailsTTL: the entry is stale and must miss.
+	b.mu.Lock()
+	b.tvDetailsAt = b.tvDetailsAt.Add(-detailsTTL - time.Minute)
+	b.mu.Unlock()
+	benefits, err = b.CampaignDetails(context.Background(), sess, "campA")
+	require.NoError(t, err)
+	assert.Nil(t, benefits, "stale cache entry must miss")
+
+	mu.Lock()
+	assert.Equal(t, 0, calls)
+	mu.Unlock()
 }
 
 func TestListActiveCampaigns_LegacySessionUsesDashboard(t *testing.T) {
