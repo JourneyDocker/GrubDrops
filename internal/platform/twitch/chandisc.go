@@ -88,8 +88,24 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 		return &cc
 	}
 
+	// sess.Games may carry a game under more than one token — the discovery
+	// scraper's whitelist union emits both a game's lowercased display name
+	// and its lowercased slug (e.g. "grand theft auto v" AND
+	// "grand-theft-auto-v"), and gameslug.Slug maps both to the same value.
+	// Dedupe by slug (skipping empty ones) so a multi-word game doesn't
+	// double the DirectoryPage_Game + AvailableDrops fan-out every tick.
+	seenSlugs := make(map[string]struct{}, len(sess.Games))
 	for _, game := range sess.Games {
-		streams, err := ch.listForGameDirectory(ctx, sess, gameslug.Slug(game))
+		slug := gameslug.Slug(game)
+		if slug == "" {
+			continue
+		}
+		if _, dup := seenSlugs[slug]; dup {
+			continue
+		}
+		seenSlugs[slug] = struct{}{}
+
+		streams, err := ch.listForGameDirectory(ctx, sess, slug)
 		if err != nil {
 			slog.Warn("tv discovery: directory failed", "game", game, "err", err)
 			continue // one bad game must not sink the rest

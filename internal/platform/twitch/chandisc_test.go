@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -95,6 +96,54 @@ func TestListByChannels_TVSession(t *testing.T) {
 	assert.Equal(t, 1, b.AllowedChannelCount("campA"))
 	// Inventory campaign keeps its own allow-list.
 	assert.Equal(t, 1, b.AllowedChannelCount("campB"))
+}
+
+// TestListByChannels_DedupesGamesBySlug proves duplicate whitelist tokens
+// that slugify to the same game (discovery's whitelist union emits both a
+// game's lowercased display name and its lowercased slug, e.g.
+// "grand theft auto v" and "grand-theft-auto-v") issue exactly one
+// DirectoryPage_Game request, not one per token — otherwise every
+// multi-word game doubles Twitch's request volume each tick.
+func TestListByChannels_DedupesGamesBySlug(t *testing.T) {
+	var mu sync.Mutex
+	dirCalls := map[string]int{}
+	srv := fakeGQL(t, map[string]func(map[string]any) string{
+		"DirectoryPage_Game": func(v map[string]any) string {
+			slug, _ := v["slug"].(string)
+			mu.Lock()
+			dirCalls[slug]++
+			mu.Unlock()
+			if slug == "rust" {
+				return dirRust
+			}
+			return `{"data":{"game":{"streams":{"edges":[]}}}}`
+		},
+		"DropsHighlightService_AvailableDrops": func(v map[string]any) string {
+			if v["channelID"] == "c1" {
+				return availAlpha
+			}
+			return `{"data":{"channel":{"viewerDropCampaigns":[]}}}`
+		},
+		"Inventory": func(map[string]any) string { return inventoryTV },
+	})
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	// "Rust" and "rust" both slugify to "rust" — must be deduped to a
+	// single directory + AvailableDrops fan-out.
+	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust", "rust"}}
+	camps, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+
+	byID := map[string]platform.Campaign{}
+	for _, c := range camps {
+		byID[c.ID] = c
+	}
+	require.Contains(t, byID, "campA", "campaign discovery must still work after dedupe")
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, 1, dirCalls["rust"], "duplicate slug must issue exactly one DirectoryPage_Game request")
 }
 
 func TestCampaignDetails_TVSession(t *testing.T) {
