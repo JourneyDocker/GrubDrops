@@ -65,6 +65,14 @@ type Config struct {
 	// table stores both. The check should be lenient.
 	AllowGame func(game string) bool
 
+	// Games is the whitelisted game display names (as stored in the games
+	// table), fed into Session.Games when the session doesn't already carry
+	// one. TV-client Twitch sessions can't see the drops dashboard, so
+	// chandisc.go's listByChannels walks one game directory per name here
+	// instead. Harmless for Android sessions — the dashboard path ignores
+	// Session.Games entirely.
+	Games []string
+
 	// AllowChannel returns true if a campaign whose AllowedChannels
 	// include one of the account's whitelisted channels should be
 	// mined, even when its Game is not whitelisted (or empty). This is
@@ -269,6 +277,9 @@ func New(cfg Config) *Watcher {
 	// Same closure backs both layers — the whitelist is canonical.
 	if cfg.Session.GameFilter == nil {
 		cfg.Session.GameFilter = cfg.AllowGame
+	}
+	if cfg.Session.Games == nil {
+		cfg.Session.Games = cfg.Games
 	}
 	w := &Watcher{cfg: cfg, state: StateIdle, lastNotifiedMilestone: -1}
 	// Pre-load persisted ghost-skips so a freshly-started watcher already
