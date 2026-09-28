@@ -666,6 +666,8 @@
   "flash.force_saved": "orden de force-watch guardado",
   "flash.force_watch_enabled": "minado de puntos de canal activado",
   "flash.force_watch_disabled": "minado de puntos de canal desactivado",
+  "flash.mine_unlinked_enabled": "minado no vinculado activado",
+  "flash.mine_unlinked_disabled": "minado no vinculado desactivado",
   "flash.marked_linked": "marcado como vinculado",
   "flash.marked_unlinked": "anulación de vínculo eliminada",
   "flash.channel_whitelist_failed": "no se pudo añadir el canal",
@@ -786,5 +788,13 @@
   "account.force_add_desc": "Añade un canal para ver por puntos (p. ej. xqc)",
   "account.force_reorder": "Canales · arrastra para reordenar",
   "account.force_priority_hint": "El primero de la lista se ve primero cuando está inactiva.",
-  "account.force_save": "Guardar orden"
+  "account.force_save": "Guardar orden",
+  "account.unlinked_title": "Minado no vinculado",
+  "account.unlinked_desc": "Mina juegos de la lista blanca aunque Twitch informe de que el juego no está conectado. Úsalo para juegos vinculados por otros medios donde Twitch sigue mostrando sin conexión pero los drops se acumulan.",
+  "account.unlinked_warning": "El tiempo de visionado en juegos realmente no vinculados no genera nada y no se puede reclamar.",
+  "account.unlinked_toggle": "Minar juegos no vinculados",
+  "account.unlinked_on": "Minando juegos vinculados y no vinculados de la lista blanca",
+  "account.unlinked_off": "Minando solo juegos vinculados",
+  "account.unlinked_enable": "Activar",
+  "account.unlinked_disable": "Desactivar"
 }

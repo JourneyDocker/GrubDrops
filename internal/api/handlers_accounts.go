@@ -183,6 +183,8 @@ type accountDetailPage struct {
 	// when idle); ForceWatchEnabled is the per-account toggle.
 	ForceChannels     []string
 	ForceWatchEnabled bool
+	// MineUnlinked is the per-account toggle for mining unlinked drops.
+	MineUnlinked bool
 }
 
 type gameRow struct {
@@ -238,6 +240,10 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 	if v, err := d.q.GetSettingString(r.Context(), ForceWatchEnabledKey(id)); err == nil && string(v) == "1" {
 		forceEnabled = true
 	}
+	mineUnlinked := false
+	if v, err := d.q.GetSettingString(r.Context(), MineUnlinkedKey(id)); err == nil && string(v) == "1" {
+		mineUnlinked = true
+	}
 
 	render(w, r, d.t, "accounts_detail.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r),
@@ -245,6 +251,7 @@ func (d accountsDeps) detail(w http.ResponseWriter, r *http.Request) {
 		Page: accountDetailPage{
 			Account: row, AllGames: allRows, SelectedGames: selected, Channels: channels,
 			ForceChannels: forceChannels, ForceWatchEnabled: forceEnabled,
+			MineUnlinked: mineUnlinked,
 		},
 		Active: "accounts",
 	})
@@ -597,6 +604,11 @@ func (d accountsDeps) removeChannel(w http.ResponseWriter, r *http.Request) {
 // watcher's force-watch source in cmd/miner.
 func ForceWatchEnabledKey(accountID string) string { return "force_watch:" + accountID }
 
+// MineUnlinkedKey is the per-account KV flag toggling mining of unlinked
+// drops (campaigns the account has not linked). Consumed by the watcher
+// build in cmd/miner.
+func MineUnlinkedKey(accountID string) string { return "mine_unlinked:" + accountID }
+
 // addForceChannel handles POST /accounts/:id/force-channels/add — adds a
 // permanent channel-points channel (watched 24/7 when idle).
 func (d accountsDeps) addForceChannel(w http.ResponseWriter, r *http.Request) {
@@ -707,6 +719,34 @@ func (d accountsDeps) forceWatchToggle(w http.ResponseWriter, r *http.Request) {
 		d.sm.Put(r.Context(), "flash", "flash.force_watch_enabled")
 	} else {
 		d.sm.Put(r.Context(), "flash", "flash.force_watch_disabled")
+	}
+	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
+}
+
+// mineUnlinkedToggle handles POST /accounts/:id/mine-unlinked — flips the
+// per-account toggle for mining unlinked drops.
+func (d accountsDeps) mineUnlinkedToggle(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := d.q.GetAccount(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	val := []byte("")
+	enabled := r.FormValue("enabled") == "1"
+	if enabled {
+		val = []byte("1")
+	}
+	if err := d.q.UpsertSettingString(r.Context(), gen.UpsertSettingStringParams{
+		Key: MineUnlinkedKey(id), Value: val,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	d.applyReload(r.Context())
+	if enabled {
+		d.sm.Put(r.Context(), "flash", "flash.mine_unlinked_enabled")
+	} else {
+		d.sm.Put(r.Context(), "flash", "flash.mine_unlinked_disabled")
 	}
 	http.Redirect(w, r, "/accounts/"+id, http.StatusSeeOther)
 }

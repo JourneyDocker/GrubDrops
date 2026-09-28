@@ -461,6 +461,14 @@ func run() error {
 		forceCollected := loadCollectOverrides(ctx, q)
 		persistedSkips, skipRecorder, skipClearer := loadSkipOverrides(ctx, q)
 
+		// Per-account "mine unlinked" flag — read per build (per Reload)
+		// so toggling + reloading takes effect. See MineUnlinked in
+		// watcher.Config.
+		mineUnlinked := false
+		if v, err := q.GetSettingString(ctx, api.MineUnlinkedKey(a.ID)); err == nil && string(v) == "1" {
+			mineUnlinked = true
+		}
+
 		acctLabel := a.DisplayName
 		w := watcher.New(watcher.Config{
 			AccountID: a.ID, AccountLabel: acctLabel, Platform: a.Platform,
@@ -484,6 +492,7 @@ func run() error {
 			SkipRecorder:   skipRecorder,
 			SkipClearer:    skipClearer,
 			ForceWatcher:   forceWatchStore{q: q},
+			MineUnlinked:   mineUnlinked,
 		})
 		return scheduler.NewEntry(a.ID, w), nil
 	}

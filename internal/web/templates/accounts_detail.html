@@ -116,6 +116,21 @@
   </section>
 
   <section class="settings-card">
+    <header class="section-h"><h3>{{t "account.unlinked_title"}}</h3></header>
+    <p class="hint" style="margin:0 0 14px;">{{t "account.unlinked_desc"}}</p>
+    <p class="hint" style="margin:0 0 14px;color:var(--accent);">⚠ {{t "account.unlinked_warning"}}</p>
+    <form method="post" action="/accounts/{{.Account.ID}}/mine-unlinked">
+      <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+      <input type="hidden" name="enabled" value="{{if .MineUnlinked}}0{{else}}1{{end}}">
+      <div class="kvedit"><div class="row">
+        <span class="k">{{t "account.unlinked_toggle"}}</span>
+        <span class="d">{{if .MineUnlinked}}{{t "account.unlinked_on"}}{{else}}{{t "account.unlinked_off"}}{{end}}</span>
+        <button class="btn-linear" type="submit">{{if .MineUnlinked}}{{t "account.unlinked_disable"}}{{else}}{{t "account.unlinked_enable"}}{{end}} →</button>
+      </div></div>
+    </form>
+  </section>
+
+  <section class="settings-card">
     <header class="section-h"><h3>{{t "account.force_title"}}</h3></header>
     <p class="hint" style="margin:0 0 14px;">{{t "account.force_desc"}}</p>
     <p class="hint" style="margin:0 0 14px;color:var(--accent);">⚠ {{t "account.force_warning"}}</p>

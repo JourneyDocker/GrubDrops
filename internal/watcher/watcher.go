@@ -121,6 +121,13 @@ type Config struct {
 	// account truly isn't linked the watch just accrues no progress.
 	ForceLinked func(campaignID string) bool
 
+	// MineUnlinked, when true, mines whitelisted campaigns even if the
+	// backend reports AccountLinked=false (for games where Twitch shows
+	// unconnected but drops still accrue via other linked means).
+	// The whitelist (AllowGame/AllowChannel) still applies; only the
+	// link gate is bypassed.
+	MineUnlinked bool
+
 	// ForceCollected, when set and returning true for (accountID, benefitID),
 	// marks that benefit as user-asserted collected. The reconcile prune skips
 	// it, so a manual "mark collected" survives even while inventory reports the
@@ -1240,6 +1247,8 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			// backend reporting unlinked. The live progress check confirms.
 			if w.cfg.ForceLinked != nil && w.cfg.ForceLinked(c.ID) {
 				slog.Info("watcher mining link-overridden campaign", "kind", "discovery", "account", w.cfg.AccountID, "campaign", c.Name)
+			} else if w.cfg.MineUnlinked {
+				slog.Info("watcher mining unlinked campaign (mine-unlinked enabled)", "kind", "discovery", "account", w.cfg.AccountID, "campaign", c.Name)
 			} else {
 				skippedUnlinked++
 				continue

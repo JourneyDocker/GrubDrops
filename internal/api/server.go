@@ -300,6 +300,7 @@ func NewRouter(d Deps) http.Handler {
 	authed.Post("/accounts/{id}/force-channels/add", accs.addForceChannel)
 	authed.Post("/accounts/{id}/force-channels/remove", accs.removeForceChannel)
 	authed.Post("/accounts/{id}/force-watch", accs.forceWatchToggle)
+	authed.Post("/accounts/{id}/mine-unlinked", accs.mineUnlinkedToggle)
 	authed.Post("/accounts/{id}/reload", accs.reloadOne)
 	authed.Post("/accounts/{id}/toggle", accs.toggleEnabled)
 	authed.Post("/accounts/{id}/delete", accs.delete)

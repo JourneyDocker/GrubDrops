@@ -4,6 +4,13 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Added
+
+- **Per-account unlinked mining option.** Each account page now has an "Unlinked
+  mining" toggle that mines whitelisted games even when Twitch reports the game
+  as not connected, for games linked through other means where drops still
+  accrue.
+
 ## [1.4.2] — 2026-09-28
 
 ### Fixed

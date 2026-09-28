@@ -666,6 +666,8 @@
   "flash.force_saved": "已保存强制观看顺序",
   "flash.force_watch_enabled": "已启用频道积分挖取",
   "flash.force_watch_disabled": "已禁用频道积分挖取",
+  "flash.mine_unlinked_enabled": "已启用未关联挖取",
+  "flash.mine_unlinked_disabled": "已禁用未关联挖取",
   "flash.marked_linked": "已标记为已关联",
   "flash.marked_unlinked": "已移除关联覆盖",
   "flash.channel_whitelist_failed": "无法将频道加入白名单",
@@ -786,5 +788,13 @@
   "account.force_add_desc": "添加一个用于挖积分的频道（例如 xqc）",
   "account.force_reorder": "频道 · 拖动排序",
   "account.force_priority_hint": "列表顶部在空闲时最先观看。",
-  "account.force_save": "保存顺序"
+  "account.force_save": "保存顺序",
+  "account.unlinked_title": "未关联挖取",
+  "account.unlinked_desc": "即使 Twitch 报告游戏未关联，也挖取白名单中的游戏。适用于通过其他方式关联、Twitch 仍显示未连接但掉宝仍会累积的游戏。",
+  "account.unlinked_warning": "在真正未关联的游戏上花费的观看时间没有任何收益，也无法领取。",
+  "account.unlinked_toggle": "挖取未关联游戏",
+  "account.unlinked_on": "正在挖取已关联和未关联的白名单游戏",
+  "account.unlinked_off": "仅挖取已关联游戏",
+  "account.unlinked_enable": "启用",
+  "account.unlinked_disable": "禁用"
 }

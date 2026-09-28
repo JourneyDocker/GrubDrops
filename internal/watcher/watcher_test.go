@@ -1764,3 +1764,94 @@ func TestWatcher_GhostSkip_SelfHealsWhenBenefitReappears(t *testing.T) {
 	w.mu.Unlock()
 	assert.False(t, stillSkipped, "healme must be removed from skippedBenefits after self-heal")
 }
+
+// unlinkedBackend serves one ACTIVE whitelisted campaign that the backend
+// reports as AccountLinked=false with AccountLinkChecked=true. Used to
+// prove the default link gate skips it (StateAwaitingConnect) while
+// MineUnlinked:true mines it.
+type unlinkedBackend struct {
+	*platformtest.MockBackend
+	mu     sync.Mutex
+	picked string
+}
+
+func (u *unlinkedBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	return []platform.Campaign{
+		{ID: "unlinked", Platform: "twitch", Game: "Rust", Name: "Rust Unlinked Camp",
+			Status: "active", AccountLinked: false, AccountLinkChecked: true,
+			Benefits: []platform.DropBenefit{{ID: "d_unlinked", CampaignID: "unlinked", RequiredMinutes: 2}}},
+	}, nil
+}
+
+func (u *unlinkedBackend) ListEligibleChannels(_ context.Context, _ platform.Session, c platform.Campaign) ([]platform.Stream, error) {
+	u.mu.Lock()
+	if u.picked == "" {
+		u.picked = c.ID
+	}
+	u.mu.Unlock()
+	return []platform.Stream{{Channel: "streamer"}}, nil
+}
+
+func (u *unlinkedBackend) firstPicked() string {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	return u.picked
+}
+
+// TestWatcher_UnlinkedSkippedByDefault_MinedWithMineUnlinked: a whitelisted
+// but AccountLinked=false + AccountLinkChecked=true campaign is skipped by
+// default (watcher parks in StateAwaitingConnect, never picks a stream),
+// but is mined when MineUnlinked:true.
+func TestWatcher_UnlinkedSkippedByDefault_MinedWithMineUnlinked(t *testing.T) {
+	t.Run("skipped by default", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		backend := &unlinkedBackend{MockBackend: platformtest.New()}
+		w := New(Config{
+			AccountID:    "acc_unlinked_default",
+			Backend:      backend,
+			Session:      platform.Session{AccessToken: "tok"},
+			Notifier:     &recordingNotifier{},
+			TickInterval: 2 * time.Millisecond,
+			AllowGame:    func(g string) bool { return g == "Rust" },
+		})
+
+		go func() { _ = w.Run(ctx) }()
+
+		// The watcher cycles awaiting-connect -> pick-campaign on recheck,
+		// so State() at any instant is racy. Give it time to run several
+		// discovery cycles, then assert it never picked a stream and never
+		// entered watching — the unlinked campaign must not be mined.
+		time.Sleep(300 * time.Millisecond)
+		assert.Equal(t, "", backend.firstPicked(),
+			"unlinked campaign must not be mined by default")
+		assert.NotEqual(t, StateWatching, w.State(),
+			"watcher must not be watching an unlinked campaign by default")
+		assert.NotEqual(t, StatePickStream, w.State(),
+			"watcher must not be picking a stream for an unlinked campaign by default")
+	})
+
+	t.Run("mined with MineUnlinked", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		backend := &unlinkedBackend{MockBackend: platformtest.New()}
+		w := New(Config{
+			AccountID:    "acc_unlinked_mine",
+			Backend:      backend,
+			Session:      platform.Session{AccessToken: "tok"},
+			Notifier:     &recordingNotifier{},
+			TickInterval: 2 * time.Millisecond,
+			AllowGame:    func(g string) bool { return g == "Rust" },
+			MineUnlinked: true,
+		})
+
+		go func() { _ = w.Run(ctx) }()
+
+		require.Eventually(t, func() bool { return backend.firstPicked() != "" },
+			time.Second, 5*time.Millisecond, "watcher never mined the unlinked campaign with MineUnlinked:true")
+		assert.Equal(t, "unlinked", backend.firstPicked(),
+			"MineUnlinked:true must mine the whitelisted unlinked campaign")
+	})
+}

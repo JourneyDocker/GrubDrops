@@ -666,6 +666,8 @@
   "flash.force_saved": "force-watch order saved",
   "flash.force_watch_enabled": "channel-points mining enabled",
   "flash.force_watch_disabled": "channel-points mining disabled",
+  "flash.mine_unlinked_enabled": "unlinked mining enabled",
+  "flash.mine_unlinked_disabled": "unlinked mining disabled",
   "flash.marked_linked": "marked as linked",
   "flash.marked_unlinked": "link override removed",
   "flash.channel_whitelist_failed": "could not whitelist channel",
@@ -786,5 +788,13 @@
   "account.force_add_desc": "Add a channel to watch for points (e.g. xqc)",
   "account.force_reorder": "Channels · drag to reorder",
   "account.force_priority_hint": "Top of the list is watched first when idle.",
-  "account.force_save": "Save order"
+  "account.force_save": "Save order",
+  "account.unlinked_title": "Unlinked mining",
+  "account.unlinked_desc": "Mine whitelisted games even when Twitch reports the game as not connected. Use for games linked through other means where Twitch still shows unconnected but drops accrue.",
+  "account.unlinked_warning": "Watch-time on truly unlinked games earns nothing and cannot be claimed.",
+  "account.unlinked_toggle": "Mine unlinked games",
+  "account.unlinked_on": "Mining linked + unlinked whitelisted games",
+  "account.unlinked_off": "Mining linked games only",
+  "account.unlinked_enable": "Enable",
+  "account.unlinked_disable": "Disable"
 }
