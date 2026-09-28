@@ -4,6 +4,17 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Kick accounts no longer show "needs re-auth" a week after login.** The
+  7-day expiry stamped at login is ignored for Kick; the periodic auth check
+  decides whether cookies still work.
+- **A brief database or network hiccup at startup no longer parks an
+  account as needing re-auth.** Loading and refreshing a session now retry a
+  few times first.
+- **A refreshed Twitch session is kept even if saving it fails**, so its new
+  refresh token isn't lost.
+
 ## [1.4.0] — 2026-09-28
 
 ### Fixed
