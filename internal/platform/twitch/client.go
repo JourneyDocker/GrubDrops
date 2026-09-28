@@ -54,6 +54,15 @@ type client struct {
 	intMu     sync.Mutex
 	intToken  string
 	intExpiry time.Time
+
+	// profiles maps an OAuth token to the client profile it was minted
+	// by. Populated by bind() at every Backend entry point; tokens are
+	// unique per client, so the map is unambiguous.
+	profiles sync.Map // token -> clientProfile
+
+	// beaconHostAllow overrides hostAllowedForBeacon in tests only (the
+	// httptest server isn't a twitch.tv host). nil in production.
+	beaconHostAllow func(rawURL string) bool
 }
 
 func newClient() *client {
@@ -220,21 +229,43 @@ func (c *client) integrity(ctx context.Context, token string) (string, error) {
 	return c.intToken, nil
 }
 
-// setCommonHeaders mirrors DevilXD's AuthState.headers(gql=True) for
-// the Android client profile. Android apps don't send Origin/Referer
-// so we omit them.
+// setCommonHeaders mirrors DevilXD's AuthState.headers(gql=True). Client-Id
+// and User-Agent follow the profile of whichever Twitch client minted
+// oauthToken (see bind/profileForToken) — Android apps don't send
+// Origin/Referer so we omit them for both profiles.
 func (c *client) setCommonHeaders(req *http.Request, oauthToken string) {
+	p := c.profileForToken(oauthToken)
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("Accept-Language", "en-US")
 	req.Header.Set("Pragma", "no-cache")
 	req.Header.Set("Cache-Control", "no-cache")
-	req.Header.Set("Client-Id", clientID)
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Client-Id", p.ID)
+	req.Header.Set("User-Agent", p.UserAgent)
 	req.Header.Set("Client-Session-Id", c.sessionID)
 	req.Header.Set("X-Device-Id", c.deviceID)
 	if oauthToken != "" {
 		req.Header.Set("Authorization", "OAuth "+oauthToken)
 	}
+}
+
+// bind records which Twitch client s.AccessToken belongs to so every
+// request made with that token (including heartbeats, which carry only
+// the token) uses the matching Client-Id.
+func (c *client) bind(s platform.Session) {
+	if s.AccessToken == "" {
+		return
+	}
+	c.profiles.Store(s.AccessToken, profileFor(s.ClientID))
+}
+
+// profileForToken returns the client profile bound to token, or the
+// legacy Android profile if the token was never bound (unauthenticated
+// calls, or a caller that hasn't been updated to bind()).
+func (c *client) profileForToken(token string) clientProfile {
+	if v, ok := c.profiles.Load(token); ok {
+		return v.(clientProfile)
+	}
+	return profileAndroid
 }
 
 // gql sends a persisted GraphQL operation and decodes the `data` field
@@ -452,6 +483,9 @@ func (c *client) validateBeaconURL(rawURL, channel string) (string, error) {
 // we only follow twitch.tv hosts. The client's homeURL host is also
 // allowed so unit tests can point the scraper at an httptest server.
 func (c *client) hostAllowedForBeacon(rawURL string) bool {
+	if c.beaconHostAllow != nil {
+		return c.beaconHostAllow(rawURL)
+	}
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return false

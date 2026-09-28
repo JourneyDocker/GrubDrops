@@ -27,10 +27,6 @@ type watch struct {
 	spadeURLs map[string]string
 }
 
-func newWatch() *watch {
-	return &watch{c: newClient(), spadeURLs: map[string]string{}}
-}
-
 type watchInternal struct {
 	Channel     string
 	ChannelID   string

@@ -18,6 +18,7 @@ import (
 // null currentUser means the token is invalid or integrity-blocked —
 // i.e. the account needs re-authentication. Satisfies platform.AuthChecker.
 func (b *Backend) VerifyAuth(ctx context.Context, s platform.Session) error {
+	b.c.bind(s)
 	const q = `query CurrentUser { currentUser { id } }`
 	var resp struct {
 		CurrentUser *struct {
@@ -39,6 +40,7 @@ var _ platform.AuthChecker = (*Backend)(nil)
 // CurrentUser gql query. The URL is on static-cdn.jtvnw.net (public CDN), so
 // it is embedded directly in the UI. Satisfies platform.AvatarFetcher.
 func (b *Backend) FetchAvatar(ctx context.Context, s platform.Session) (string, error) {
+	b.c.bind(s)
 	const q = `query CurrentUser { currentUser { id login displayName profileImageURL(width: 300) } }`
 	var resp struct {
 		CurrentUser *struct {
@@ -65,6 +67,7 @@ var _ platform.AvatarFetcher = (*Backend)(nil)
 // Twitch UUIDs, so DropCampaignDetails can't resolve them — return empty.
 // Satisfies platform.CampaignDetailer.
 func (b *Backend) CampaignDetails(ctx context.Context, s platform.Session, campaignID string) ([]platform.DropBenefit, error) {
+	b.c.bind(s)
 	if strings.ContainsAny(campaignID, "| ") {
 		return nil, nil
 	}
@@ -134,11 +137,17 @@ var _ platform.PubSubAware = (*Backend)(nil)
 func New() *Backend {
 	c := newClient()
 	return &Backend{
-		c:                       c,
-		auth:                    newAuthFlow(),
-		disc:                    &discovery{c: c},
-		chans:                   &channels{c: c},
-		watch:                   newWatch(),
+		c:     c,
+		auth:  newAuthFlow(),
+		disc:  &discovery{c: c},
+		chans: &channels{c: c},
+		// watch MUST share c with the rest of the backend: bind() records
+		// a token's client profile on this exact *client instance, and the
+		// Spade heartbeat (which carries only the token, not the session)
+		// reads it back via the same instance's profileForToken. A
+		// separate client here would silently strand every bind() and
+		// send TV-bound heartbeats under the Android profile.
+		watch:                   &watch{c: c, spadeURLs: map[string]string{}},
 		claim:                   &claimer{c: c},
 		adv:                     &advisory{c: c},
 		allowedLoginsByCampaign: map[string][]string{},
@@ -153,7 +162,7 @@ func NewWithTransport(transport *http.Transport) *Backend {
 		auth:                    newAuthFlowWithTransport(transport),
 		disc:                    &discovery{c: c},
 		chans:                   &channels{c: c},
-		watch:                   newWatch(),
+		watch:                   &watch{c: c, spadeURLs: map[string]string{}}, // see New(): must share c
 		claim:                   &claimer{c: c},
 		adv:                     &advisory{c: c},
 		allowedLoginsByCampaign: map[string][]string{},
@@ -215,10 +224,17 @@ func (b *Backend) LoginViaBrowser(_ context.Context, _ platform.BrowserRPC) (pla
 }
 
 func (b *Backend) RefreshSession(ctx context.Context, s platform.Session) (platform.Session, error) {
-	return b.auth.refresh(ctx, s)
+	b.c.bind(s)
+	next, err := b.auth.refresh(ctx, s)
+	if err != nil {
+		return next, err
+	}
+	b.c.bind(next)
+	return next, nil
 }
 
 func (b *Backend) ListActiveCampaigns(ctx context.Context, s platform.Session) ([]platform.Campaign, error) {
+	b.c.bind(s)
 	camps, err := b.disc.listActive(ctx, s)
 	if err != nil {
 		return nil, err
@@ -351,6 +367,7 @@ func (b *Backend) UnsubscribeChannel(_ string, channelID string) {
 }
 
 func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, c platform.Campaign) ([]platform.Stream, error) {
+	b.c.bind(s)
 	b.mu.Lock()
 	allowed := b.allowedLoginsByCampaign[c.ID]
 	b.mu.Unlock()
@@ -366,10 +383,12 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 }
 
 func (b *Backend) InventoryProgress(ctx context.Context, s platform.Session) ([]platform.Progress, error) {
+	b.c.bind(s)
 	return b.disc.inventory(ctx, s)
 }
 
 func (b *Backend) StartWatch(ctx context.Context, s platform.Session, stream platform.Stream) (platform.WatchHandle, error) {
+	b.c.bind(s)
 	return b.watch.start(ctx, s, stream)
 }
 
@@ -382,6 +401,7 @@ func (b *Backend) StopWatch(ctx context.Context, h platform.WatchHandle) error {
 }
 
 func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.DropBenefit) error {
+	b.c.bind(s)
 	// userID feeds the synthetic-instance-id fallback in claimer.claim
 	// when the inventory dropInstanceID is missing. Cached after the
 	// first watch; resolve failure is non-fatal (claim degrades).
@@ -393,6 +413,7 @@ func (b *Backend) Claim(ctx context.Context, s platform.Session, drop platform.D
 // the set of drop template IDs the channel is currently serving.
 // Empty result + nil error means "no info" — caller skips the gate.
 func (b *Backend) AvailableDropIDs(ctx context.Context, s platform.Session, channelID string) (map[string]struct{}, error) {
+	b.c.bind(s)
 	return b.adv.availableDropIDs(ctx, s, channelID)
 }
 
@@ -400,6 +421,7 @@ func (b *Backend) AvailableDropIDs(ctx context.Context, s platform.Session, chan
 // active drop session for the authenticated user, or zero-value when
 // nothing is in flight.
 func (b *Backend) CurrentSession(ctx context.Context, s platform.Session) (platform.CurrentSession, error) {
+	b.c.bind(s)
 	return b.adv.currentSession(ctx, s)
 }
 
