@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform/platformtest"
 )
 
 // TestShouldNotifyProgress_MilestoneSteps verifies progress notifications land

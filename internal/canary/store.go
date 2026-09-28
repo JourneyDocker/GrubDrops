@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 // Result is one platform's last accrual-canary outcome.

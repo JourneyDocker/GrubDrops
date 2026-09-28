@@ -17,16 +17,16 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/grubdrops/internal/auth"
-	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
-	"github.com/aalejandrofer/grubdrops/internal/canary"
-	"github.com/aalejandrofer/grubdrops/internal/gameslug"
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
-	"github.com/aalejandrofer/grubdrops/internal/netutil"
-	"github.com/aalejandrofer/grubdrops/internal/scheduler"
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
-	"github.com/aalejandrofer/grubdrops/internal/timeutil"
+	"github.com/JourneyDocker/grubdrops/internal/auth"
+	"github.com/JourneyDocker/grubdrops/internal/auth/oidc"
+	"github.com/JourneyDocker/grubdrops/internal/canary"
+	"github.com/JourneyDocker/grubdrops/internal/gameslug"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
+	"github.com/JourneyDocker/grubdrops/internal/netutil"
+	"github.com/JourneyDocker/grubdrops/internal/scheduler"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/timeutil"
 )
 
 type settingsDeps struct {

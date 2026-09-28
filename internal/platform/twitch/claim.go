@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 type claimer struct {

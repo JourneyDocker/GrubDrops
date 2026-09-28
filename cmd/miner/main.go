@@ -19,28 +19,28 @@ import (
 	"filippo.io/age"
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/grubdrops/internal/api"
-	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
-	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
-	"github.com/aalejandrofer/grubdrops/internal/authcheck"
-	"github.com/aalejandrofer/grubdrops/internal/canary"
-	"github.com/aalejandrofer/grubdrops/internal/config"
-	"github.com/aalejandrofer/grubdrops/internal/discovery"
-	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
-	mlog "github.com/aalejandrofer/grubdrops/internal/log"
-	"github.com/aalejandrofer/grubdrops/internal/netutil"
-	"github.com/aalejandrofer/grubdrops/internal/notify"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
-	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
-	"github.com/aalejandrofer/grubdrops/internal/scheduler"
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
-	"github.com/aalejandrofer/grubdrops/internal/timeutil"
-	"github.com/aalejandrofer/grubdrops/internal/update"
-	"github.com/aalejandrofer/grubdrops/internal/watcher"
-	"github.com/aalejandrofer/grubdrops/internal/web"
+	"github.com/JourneyDocker/grubdrops/internal/api"
+	"github.com/JourneyDocker/grubdrops/internal/auth/browser"
+	"github.com/JourneyDocker/grubdrops/internal/auth/oidc"
+	"github.com/JourneyDocker/grubdrops/internal/authcheck"
+	"github.com/JourneyDocker/grubdrops/internal/canary"
+	"github.com/JourneyDocker/grubdrops/internal/config"
+	"github.com/JourneyDocker/grubdrops/internal/discovery"
+	"github.com/JourneyDocker/grubdrops/internal/dockerctl"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
+	mlog "github.com/JourneyDocker/grubdrops/internal/log"
+	"github.com/JourneyDocker/grubdrops/internal/netutil"
+	"github.com/JourneyDocker/grubdrops/internal/notify"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform/kick"
+	"github.com/JourneyDocker/grubdrops/internal/platform/twitch"
+	"github.com/JourneyDocker/grubdrops/internal/scheduler"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/timeutil"
+	"github.com/JourneyDocker/grubdrops/internal/update"
+	"github.com/JourneyDocker/grubdrops/internal/watcher"
+	"github.com/JourneyDocker/grubdrops/internal/web"
 )
 
 // version is the release tag, injected at build time via
@@ -52,7 +52,7 @@ var version string
 func main() {
 	// `grubdrops keygen` prints a fresh, valid GRUB_MASTER_KEY and exits, so a
 	// Docker-only user can generate one without Go or the age tool:
-	//   docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
+	//   docker run --rm ghcr.io/journeydocker/grubdrops:main keygen
 	// The store requires an age X25519 identity (AGE-SECRET-KEY-1...); a random
 	// base64 blob fails age.ParseX25519Identity and crashes at startup.
 	if len(os.Args) > 1 && os.Args[1] == "keygen" {
@@ -642,7 +642,7 @@ func run() error {
 		if proxyTransport != nil {
 			updateClient.Transport = proxyTransport
 		}
-		updateChecker := update.NewChecker(updateClient, "aalejandrofer/GrubDrops", settingsStore)
+		updateChecker := update.NewChecker(updateClient, "JourneyDocker/GrubDrops", settingsStore)
 		updateInterval := parseDuration(os.Getenv("GRUB_UPDATE_INTERVAL"), 6*time.Hour)
 		go updateChecker.Run(ctx, updateInterval)
 		updateStatus = updateChecker.Status

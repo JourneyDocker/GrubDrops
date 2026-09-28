@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // oauthScopes mirrors DevilXD's pinned scope set.

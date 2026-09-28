@@ -9,11 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
-	"github.com/aalejandrofer/grubdrops/internal/scheduler"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
-	"github.com/aalejandrofer/grubdrops/internal/watcher"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform/platformtest"
+	"github.com/JourneyDocker/grubdrops/internal/scheduler"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/watcher"
 )
 
 // stubChannelCounter is a deterministic ChannelCounter for unit tests.

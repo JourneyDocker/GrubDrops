@@ -8,8 +8,8 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
+	"github.com/JourneyDocker/grubdrops/internal/auth/oidc"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
 )
 
 const oidcStateCookie = "grub_oidc_state"

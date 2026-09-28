@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // ProbeClaim POSTs a real /drops/claim for the given reward+campaign and dumps

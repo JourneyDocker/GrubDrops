@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // gqlTransport sends a POST body to gql.twitch.tv/gql and returns the

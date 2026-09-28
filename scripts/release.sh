@@ -18,9 +18,10 @@ if [[ -z "$TAG" ]]; then
   exit 2
 fi
 
-REGISTRY="ghcr.io/aalejandrofer"
-GRUB_IMAGE="$REGISTRY/grubdrops"
-BROWSER_IMAGE="$REGISTRY/grubdrops-browser"
+# Miner images publish to the fork; the browser image still pulls from
+# upstream (the fork doesn't build it).
+GRUB_IMAGE="ghcr.io/journeydocker/grubdrops"
+BROWSER_IMAGE="ghcr.io/aalejandrofer/grubdrops-browser"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_ROOT"

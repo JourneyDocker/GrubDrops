@@ -15,8 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 // ageKey is a throwaway age identity for encrypting stored sessions in tests.

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	mlog "github.com/aalejandrofer/grubdrops/internal/log"
+	mlog "github.com/JourneyDocker/grubdrops/internal/log"
 	"github.com/stretchr/testify/assert"
 )
 

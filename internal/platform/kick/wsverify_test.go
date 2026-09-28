@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // TestLive_WSAccrual drives the real backend WS watch path against live Kick

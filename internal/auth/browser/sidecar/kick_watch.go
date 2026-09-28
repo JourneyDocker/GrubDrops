@@ -14,7 +14,7 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 
-	pb "github.com/aalejandrofer/grubdrops/internal/auth/browser/gen/browser/v1"
+	pb "github.com/JourneyDocker/grubdrops/internal/auth/browser/gen/browser/v1"
 )
 
 // Kick credits drop watch-time ONLY for a real, actively-playing IVS

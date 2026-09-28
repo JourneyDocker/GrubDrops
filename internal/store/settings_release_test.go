@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 func TestSettings_ReleaseAccessors(t *testing.T) {

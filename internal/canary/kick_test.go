@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/grubdrops/internal/canary"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/canary"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // wsUpgrader shared across helpers.

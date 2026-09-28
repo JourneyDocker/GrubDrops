@@ -11,7 +11,7 @@
 <meta property="og:description" content="Multi-account, auto-claim, channel switching, web UI. AFK-farm timed drops on Twitch and Kick.">
 <meta property="og:image" content="img/social-preview.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="canonical" href="https://aalejandrofer.github.io/GrubDrops/">
+<link rel="canonical" href="https://journeydocker.github.io/GrubDrops/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -94,8 +94,8 @@
     <h1>Self-hosted <span class="tw">Twitch</span> &amp; <span class="kk">Kick</span><br>drops miner</h1>
     <p class="lede">Set it once and forget it. GrubDrops banks the watch-time, auto-claims drops, and switches channels across multiple accounts. Web UI, one <code>docker compose up</code>.</p>
     <div class="cta">
-      <a class="btn primary" href="https://github.com/aalejandrofer/GrubDrops">View on GitHub →</a>
-      <a class="btn ghost" href="https://github.com/aalejandrofer/GrubDrops#run-it">Get started</a>
+      <a class="btn primary" href="https://github.com/JourneyDocker/GrubDrops">View on GitHub →</a>
+      <a class="btn ghost" href="https://github.com/JourneyDocker/GrubDrops#run-it">Get started</a>
     </div>
     <div class="chips">
       <span class="chip">Go + Docker</span>
@@ -130,11 +130,11 @@
     <p class="sub">Published image, single compose file. Open <code>http://localhost:8080</code> and create the admin login.</p>
     <pre>services:
   miner:
-    image: ghcr.io/aalejandrofer/grubdrops:latest
+    image: ghcr.io/journeydocker/grubdrops:main
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
+      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/journeydocker/grubdrops:main keygen}"
       GRUB_DB_PATH: /data/miner.db
     volumes:
       - ./data:/data
@@ -142,7 +142,7 @@
   </section>
 
   <footer>
-    Open source, MIT. <a href="https://github.com/aalejandrofer/GrubDrops">github.com/aalejandrofer/GrubDrops</a><br>
+    Open source, MIT. <a href="https://github.com/JourneyDocker/GrubDrops">github.com/JourneyDocker/GrubDrops</a><br>
     Stay within each platform's ToS, on your own accounts, at your own risk.
   </footer>
 

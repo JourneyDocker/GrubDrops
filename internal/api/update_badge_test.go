@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aalejandrofer/grubdrops/internal/web"
+	"github.com/JourneyDocker/grubdrops/internal/web"
 )
 
 // TestUpdateBadgeMiddleware_InjectsContext proves the middleware stores the
@@ -63,14 +63,14 @@ func renderNav(t *testing.T, data templateData) string {
 
 func TestNav_UpdateBadgeShownWhenAvailable(t *testing.T) {
 	out := renderNav(t, templateData{AuthedAdmin: true, UpdateAvailable: true, LatestRelease: "v1.3.5"})
-	if !strings.Contains(out, "update-pill") {
-		t.Errorf("update pill missing when UpdateAvailable")
+	if strings.Contains(out, "update-pill") {
+		t.Errorf("update pill must not render (releases links removed)")
 	}
-	if !strings.Contains(out, "/releases/latest") {
-		t.Errorf("pill must link to releases/latest")
+	if strings.Contains(out, "/releases/latest") {
+		t.Errorf("nav must not link to releases/latest")
 	}
 	if !strings.Contains(out, "v1.3.5") {
-		t.Errorf("pill/title must show the latest version")
+		t.Errorf("pulse title must still show the latest version")
 	}
 	if !strings.Contains(out, "pulse update") {
 		t.Errorf("pulse dot must get the .update class (orange)")

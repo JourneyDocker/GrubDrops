@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 // SweepStaleDropChannels removes per-account channel-whitelist entries

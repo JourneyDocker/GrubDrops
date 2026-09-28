@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/aalejandrofer/grubdrops/internal/notify"
-	"github.com/aalejandrofer/grubdrops/internal/watcher"
+	"github.com/JourneyDocker/grubdrops/internal/notify"
+	"github.com/JourneyDocker/grubdrops/internal/watcher"
 )
 
 type runner interface {

@@ -7,9 +7,9 @@ import (
 
 	"github.com/alexedwards/scs/v2"
 
-	"github.com/aalejandrofer/grubdrops/internal/auth"
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/auth"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 type setupDeps struct {

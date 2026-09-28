@@ -14,8 +14,7 @@
   <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
   <img alt="Tested browser" src="https://img.shields.io/badge/tested-Chrome%20149-4285F4?logo=googlechrome&logoColor=white">
-  <a href="https://github.com/aalejandrofer/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/aalejandrofer/GrubDrops?label=release&color=2c2c2c&logo=github"></a>
-  <a href="https://github.com/aalejandrofer/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
+  <a href="https://github.com/JourneyDocker/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
@@ -82,11 +81,11 @@ no sidecar services.
 # compose.yml
 services:
   miner:
-    image: ghcr.io/aalejandrofer/grubdrops:latest
+    image: ghcr.io/journeydocker/grubdrops:main
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
+      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/journeydocker/grubdrops:main keygen}"
       GRUB_DB_PATH: /data/miner.db
       GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
       TZ: Europe/London           # server-side timezone
@@ -108,7 +107,7 @@ encrypts the stored session tokens. A random string will not parse and the miner
 crashes at startup. Generate a valid one with just Docker:
 
 ```bash
-docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
+docker run --rm ghcr.io/journeydocker/grubdrops:main keygen
 # → AGE-SECRET-KEY-1... (keep it; reuse the SAME key on every restart)
 ```
 
@@ -118,7 +117,7 @@ with *"failed to persist session"*. (Or use a named volume.)
 
 ```bash
 mkdir -p data && sudo chown 65532:65532 data
-GRUB_MASTER_KEY="$(docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen)" docker compose up -d
+GRUB_MASTER_KEY="$(docker run --rm ghcr.io/journeydocker/grubdrops:main keygen)" docker compose up -d
 ```
 
 Open **http://localhost:8080** and create the admin login.

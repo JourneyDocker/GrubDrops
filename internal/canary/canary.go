@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/notify"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/notify"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 // probe is the minimal interface satisfied by both TwitchProbe and KickProbe.

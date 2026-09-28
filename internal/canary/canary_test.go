@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/grubdrops/internal/canary"
-	"github.com/aalejandrofer/grubdrops/internal/notify"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/canary"
+	"github.com/JourneyDocker/grubdrops/internal/notify"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 // fakeProbe records the calls made to it and returns a pre-configured result.

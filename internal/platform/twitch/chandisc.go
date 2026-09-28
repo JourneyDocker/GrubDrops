@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/gameslug"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/gameslug"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // maxChannelsPerGame bounds the AvailableDrops fan-out per whitelisted

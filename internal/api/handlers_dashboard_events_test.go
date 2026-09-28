@@ -3,7 +3,7 @@ package api
 import (
 	"testing"
 
-	mlog "github.com/aalejandrofer/grubdrops/internal/log"
+	mlog "github.com/JourneyDocker/grubdrops/internal/log"
 )
 
 func TestClassifyEvent(t *testing.T) {

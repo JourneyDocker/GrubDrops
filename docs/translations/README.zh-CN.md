@@ -13,8 +13,7 @@
   <img alt="UI" src="https://img.shields.io/badge/UI-HTMX%20%2B%20Go%20templates-2c2c2c">
   <img alt="Storage" src="https://img.shields.io/badge/DB-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="Self-hosted" src="https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white">
-  <a href="https://github.com/aalejandrofer/GrubDrops/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/aalejandrofer/GrubDrops?logo=github&label=release"></a>
-  <a href="https://github.com/aalejandrofer/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
+  <a href="https://github.com/JourneyDocker/GrubDrops/pkgs/container/grubdrops"><img alt="ghcr.io image" src="https://img.shields.io/badge/ghcr.io-grubdrops-2496ED?logo=github"></a>
   <img alt="License" src="https://img.shields.io/badge/license-MIT-green">
 </p>
 
@@ -81,11 +80,11 @@ Chrome **边车容器**（通过挂载的 docker socket），所以你
 # compose.yml
 services:
   miner:
-    image: ghcr.io/aalejandrofer/grubdrops:latest
+    image: ghcr.io/journeydocker/grubdrops:main
     restart: unless-stopped
     ports: ["8080:8080"]
     environment:
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
+      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/journeydocker/grubdrops:main keygen}"
       GRUB_DB_PATH: /data/miner.db
       GRUB_SECURE_COOKIES: "0"   # plain-HTTP localhost; set 1 behind HTTPS
     volumes:
@@ -113,14 +112,14 @@ mkdir -p data && sudo chown 65532:65532 data
 会话令牌。随机字符串无法被解析，矿工会在启动时崩溃。只用 Docker 就能生成一个有效的密钥：
 
 ```bash
-docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
+docker run --rm ghcr.io/journeydocker/grubdrops:main keygen
 # → AGE-SECRET-KEY-1...（请保存好；每次重启都要复用同一个密钥）
 ```
 
 把它启动起来。`GRUB_MASTER_KEY` 用于加密存储的会话，所以请生成一个真正的密钥：
 
 ```bash
-GRUB_MASTER_KEY="$(docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen)" docker compose up -d
+GRUB_MASTER_KEY="$(docker run --rm ghcr.io/journeydocker/grubdrops:main keygen)" docker compose up -d
 ```
 
 打开 **http://localhost:8080**。首次访问会要求你创建一个管理员登录账户。

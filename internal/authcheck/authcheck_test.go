@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // fakeChecker is a platform.AuthChecker that fails its first failN calls

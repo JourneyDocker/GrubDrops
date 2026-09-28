@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aalejandrofer/grubdrops/internal/web"
+	"github.com/JourneyDocker/grubdrops/internal/web"
 )
 
 func renderLayoutPage(t *testing.T) string {

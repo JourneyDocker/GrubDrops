@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 type watch struct {

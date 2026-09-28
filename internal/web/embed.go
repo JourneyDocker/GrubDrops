@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
 )
 
 //go:embed templates/*.html

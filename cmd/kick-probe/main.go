@@ -12,9 +12,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/platform/kick"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 func main() {

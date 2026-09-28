@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/watcher"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/watcher"
 )
 
 // AccountDiscovery is the per-account view of the most recent

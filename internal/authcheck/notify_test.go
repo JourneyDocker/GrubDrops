@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 // fakeNotifier records every Notify call.

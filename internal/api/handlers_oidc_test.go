@@ -20,7 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 
-	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
+	"github.com/JourneyDocker/grubdrops/internal/auth/oidc"
 )
 
 // oidcTestEnv bundles all shared infrastructure for OIDC handler tests.

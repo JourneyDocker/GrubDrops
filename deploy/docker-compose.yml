@@ -1,6 +1,6 @@
 services:
   miner:
-    image: ghcr.io/aalejandrofer/grubdrops:latest
+    image: ghcr.io/journeydocker/grubdrops:main
     build:
       context: ..
       dockerfile: deploy/Dockerfile.miner
@@ -9,8 +9,8 @@ services:
       - "8080:8080"
     environment:
       # Must be an age X25519 identity (AGE-SECRET-KEY-1...). Generate one with:
-      #   docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen
-      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/aalejandrofer/grubdrops:latest keygen}"
+      #   docker run --rm ghcr.io/journeydocker/grubdrops:main keygen
+      GRUB_MASTER_KEY: "${GRUB_MASTER_KEY:?generate one with docker run --rm ghcr.io/journeydocker/grubdrops:main keygen}"
       GRUB_DB_PATH: /data/miner.db
       GRUB_HTTP_ADDR: 0.0.0.0:8080
       # Timezone: sets the server-side clock for log timestamps and

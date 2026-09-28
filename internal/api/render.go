@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
 )
 
 // Renderer is satisfied by *web.PageTemplates and by *template.Template.

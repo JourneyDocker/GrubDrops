@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/auth/browser"
-	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
-	"github.com/aalejandrofer/grubdrops/internal/netutil"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/auth/browser"
+	"github.com/JourneyDocker/grubdrops/internal/dockerctl"
+	"github.com/JourneyDocker/grubdrops/internal/netutil"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // Backend implements platform.Backend for Kick over a pure-HTTP utls client

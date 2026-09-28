@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/platform/kick"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform/kick"
 )
 
 // wsProber is the surface of kick.Backend that KickProbe needs.

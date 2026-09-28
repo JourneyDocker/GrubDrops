@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/netutil"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/netutil"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/http2"
 )

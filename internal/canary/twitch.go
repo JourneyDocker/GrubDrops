@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/platform/twitch"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform/twitch"
 )
 
 // beaconProber is the surface of twitch.Backend that TwitchProbe needs.

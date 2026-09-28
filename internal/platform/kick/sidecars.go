@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
+	"github.com/JourneyDocker/grubdrops/internal/dockerctl"
 )
 
 // slugify lowercases s and collapses every run of chars outside [a-z0-9] to a

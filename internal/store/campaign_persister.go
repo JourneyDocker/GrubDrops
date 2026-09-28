@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/gameslug"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/gameslug"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 // LinkOverridePrefix namespaces the manual "I've linked it" overrides in

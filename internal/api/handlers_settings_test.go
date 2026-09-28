@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
-	"github.com/aalejandrofer/grubdrops/internal/web"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/web"
 )
 
 func TestSettingsTemplateRenders(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/aalejandrofer/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store"
 )
 
 // A snapshot must be a real, openable SQLite database containing the live

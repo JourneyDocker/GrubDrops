@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	pb "github.com/aalejandrofer/grubdrops/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/grubdrops/internal/gameslug"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	pb "github.com/JourneyDocker/grubdrops/internal/auth/browser/gen/browser/v1"
+	"github.com/JourneyDocker/grubdrops/internal/gameslug"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // isTabMissingErr matches the sidecar's "no authenticated tab for

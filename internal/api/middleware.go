@@ -11,7 +11,7 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/justinas/nosurf"
 
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
 )
 
 type ctxKey int

@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 // idleReasonNeedsAuth is the idleReason acquireSession returns when the

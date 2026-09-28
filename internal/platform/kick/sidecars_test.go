@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/dockerctl"
+	"github.com/JourneyDocker/grubdrops/internal/dockerctl"
 )
 
 func TestSlugify(t *testing.T) {

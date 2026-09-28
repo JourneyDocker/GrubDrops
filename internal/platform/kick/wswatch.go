@@ -15,8 +15,8 @@ import (
 	"github.com/gorilla/websocket"
 	utls "github.com/refraction-networking/utls"
 
-	"github.com/aalejandrofer/grubdrops/internal/netutil"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/netutil"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // Pure-WebSocket Kick watch path. A viewer presence over wss — NO browser, no

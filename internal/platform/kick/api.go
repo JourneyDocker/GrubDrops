@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // ErrClaimNeedsLink signals that a Kick claim was rejected because the

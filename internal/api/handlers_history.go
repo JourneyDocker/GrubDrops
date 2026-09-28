@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	mlog "github.com/aalejandrofer/grubdrops/internal/log"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
-	"github.com/aalejandrofer/grubdrops/internal/timeutil"
+	mlog "github.com/JourneyDocker/grubdrops/internal/log"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/timeutil"
 )
 
 // historyDeps owns /history. Pulls claims from the on-disk claims

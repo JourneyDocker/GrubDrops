@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/platform/platformtest"
-	"github.com/aalejandrofer/grubdrops/internal/watcher"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform/platformtest"
+	"github.com/JourneyDocker/grubdrops/internal/watcher"
 )
 
 // liveRunner is a runner that stays alive (incrementing a tick counter on a

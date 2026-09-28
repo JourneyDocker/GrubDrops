@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // NewForTest builds a Backend pointed at the given endpoint URL.

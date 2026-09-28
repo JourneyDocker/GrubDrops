@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/authcheck"
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/authcheck"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 func alertTestQueries(t *testing.T) *gen.Queries {

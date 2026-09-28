@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/aalejandrofer/grubdrops/internal/canary"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/canary"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // spadeTestServer builds an httptest server that serves both the channel

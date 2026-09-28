@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // advisory wraps the optional pre-watch + post-claim verification gql

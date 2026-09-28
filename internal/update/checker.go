@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store"
 )
 
 // Checker polls the GitHub releases API for the latest GrubDrops tag and caches

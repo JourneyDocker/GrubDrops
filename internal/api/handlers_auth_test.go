@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/aalejandrofer/grubdrops/internal/web"
+	"github.com/JourneyDocker/grubdrops/internal/web"
 )
 
 func renderLogin(t *testing.T, data templateData) string {

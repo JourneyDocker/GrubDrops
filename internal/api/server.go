@@ -12,15 +12,15 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/aalejandrofer/grubdrops/internal/auth/oidc"
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
-	mlog "github.com/aalejandrofer/grubdrops/internal/log"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/scheduler"
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
-	"github.com/aalejandrofer/grubdrops/internal/timeutil"
-	"github.com/aalejandrofer/grubdrops/internal/web"
+	"github.com/JourneyDocker/grubdrops/internal/auth/oidc"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
+	mlog "github.com/JourneyDocker/grubdrops/internal/log"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/scheduler"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/timeutil"
+	"github.com/JourneyDocker/grubdrops/internal/web"
 )
 
 // displayZone is the process-wide display timezone, set once in NewRouter so

@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/netutil"
+	"github.com/JourneyDocker/grubdrops/internal/netutil"
 	"github.com/gorilla/websocket"
 )
 

@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // imageFetcher is satisfied by the Kick backend — pulls a CDN asset over

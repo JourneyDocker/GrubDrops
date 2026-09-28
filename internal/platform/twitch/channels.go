@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/aalejandrofer/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
 // sameGame compares two Twitch game/category display names. Both sides

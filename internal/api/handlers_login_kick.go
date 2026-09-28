@@ -11,12 +11,12 @@ import (
 	"github.com/alexedwards/scs/v2"
 	"github.com/go-chi/chi/v5"
 
-	pb "github.com/aalejandrofer/grubdrops/internal/auth/browser/gen/browser/v1"
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
-	"github.com/aalejandrofer/grubdrops/internal/platform"
-	"github.com/aalejandrofer/grubdrops/internal/store"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
-	"github.com/aalejandrofer/grubdrops/internal/timeutil"
+	pb "github.com/JourneyDocker/grubdrops/internal/auth/browser/gen/browser/v1"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
+	"github.com/JourneyDocker/grubdrops/internal/platform"
+	"github.com/JourneyDocker/grubdrops/internal/store"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/timeutil"
 )
 
 // KickBrowserClient is the surface the Kick login handler depends on.

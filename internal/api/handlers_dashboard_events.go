@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aalejandrofer/grubdrops/internal/i18n"
-	mlog "github.com/aalejandrofer/grubdrops/internal/log"
-	"github.com/aalejandrofer/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/i18n"
+	mlog "github.com/JourneyDocker/grubdrops/internal/log"
+	"github.com/JourneyDocker/grubdrops/internal/store/gen"
 )
 
 // eventMsgKeys maps the exact static slog message text emitted by the
