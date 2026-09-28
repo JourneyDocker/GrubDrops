@@ -174,6 +174,8 @@ func TestHeartbeatUsesBoundClient(t *testing.T) {
 
 Before relying on `TestHeartbeatUsesBoundClient`, read `resolveSpadeURL`, `hostAllowedForBeacon` and `fetchText` in `client.go` (lines ~401-520). If the channel-page URL or host-pin logic differs from what the test assumes, adapt the test server to the real URL shapes (e.g. `c.homeURL + "/" + channel`) and add the smallest test seam that already has a precedent in this file. Do not weaken the production host pin.
 
+Also add a guard, per LCBRST/TwitchDropsMiner-CLI `8a7f516`: pages served to app-client profiles don't link the spade URL, so the channel page must always be the web page. In `resolveSpadeURL`, assert (via the test server's recorded request) that the channel page is fetched from `c.homeURL + "/" + channel`, the same as today, for a TV-bound token. In production `homeURL` is `https://www.twitch.tv`, and it must never be derived from the client profile. Add this assertion to `TestHeartbeatUsesBoundClient` by recording `r.URL.Path` of the GET and checking it equals `/chan`.
+
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `go test ./internal/platform/twitch/ -run 'TestProfileFor|TestClientIDFollowsSession|TestHeartbeatUsesBoundClient' -v`
