@@ -267,3 +267,73 @@ func TestListActiveCampaigns_LegacySessionUsesDashboard(t *testing.T) {
 	assert.True(t, called["dash"])
 	assert.False(t, called["dir"], "Android sessions must not change discovery path")
 }
+
+// TestListByChannels_StatusFromWindow: channel-first campaigns derive
+// Status from their startAt/endAt window like the dashboard path, instead
+// of always claiming "active" — an expired in-progress Inventory campaign
+// must not be offered to the watcher as mineable.
+func TestListByChannels_StatusFromWindow(t *testing.T) {
+	const availUpcoming = `{"data":{"channel":{"viewerDropCampaigns":[{"id":"campU","name":"Soon","game":{"id":"263490","name":"Rust"},
+ "startAt":"2029-01-01T00:00:00Z","endAt":"2030-01-01T00:00:00Z",
+ "timeBasedDrops":[{"id":"dU","name":"U","requiredMinutesWatched":60,"requiredSubs":0,"benefitEdges":[{"benefit":{"id":"bU","name":"U","imageAssetURL":""}}]}]}]}}}`
+	const inventoryMixed = `{"data":{"currentUser":{"inventory":{"dropCampaignsInProgress":[
+ {"id":"campX","name":"Over","game":{"id":"263490","name":"Rust"},"startAt":"2020-01-01T00:00:00Z","endAt":"2020-02-01T00:00:00Z",
+  "timeBasedDrops":[{"id":"dX","name":"X","requiredMinutesWatched":60,"requiredSubs":0,
+    "benefitEdges":[{"benefit":{"id":"bX","name":"X","imageAssetURL":""}}],
+    "self":{"currentMinutesWatched":14,"isClaimed":false,"dropInstanceID":"iX"}}]},
+ {"id":"campB","name":"Live","game":{"id":"263490","name":"Rust"},"startAt":"2020-01-01T00:00:00Z","endAt":"2030-01-01T00:00:00Z",
+  "timeBasedDrops":[]}],
+ "gameEventDrops":[]}}}}`
+	srv := fakeGQL(t, map[string]func(map[string]any) string{
+		"DirectoryPage_Game": func(v map[string]any) string { return dirRust },
+		"DropsHighlightService_AvailableDrops": func(v map[string]any) string {
+			if v["channelID"] == "c1" {
+				return availUpcoming
+			}
+			return `{"data":{"channel":{"viewerDropCampaigns":[]}}}`
+		},
+		"Inventory": func(map[string]any) string { return inventoryMixed },
+	})
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust"}}
+	camps, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+	byID := map[string]platform.Campaign{}
+	for _, c := range camps {
+		byID[c.ID] = c
+	}
+	require.Contains(t, byID, "campX")
+	require.Contains(t, byID, "campU")
+	require.Contains(t, byID, "campB")
+	assert.Equal(t, "expired", byID["campX"].Status)
+	assert.Equal(t, "upcoming", byID["campU"].Status)
+	assert.Equal(t, "active", byID["campB"].Status)
+	assert.False(t, byID["campU"].StartsAt.IsZero(), "startAt decoded")
+}
+
+// TestListByChannels_InventoryFailureKeepsDirectoryResults: a failed
+// Inventory call is logged and the directory-sourced campaigns are still
+// returned, rather than failing (and discarding) the whole pass.
+func TestListByChannels_InventoryFailureKeepsDirectoryResults(t *testing.T) {
+	srv := fakeGQL(t, map[string]func(map[string]any) string{
+		"DirectoryPage_Game": func(v map[string]any) string { return dirRust },
+		"DropsHighlightService_AvailableDrops": func(v map[string]any) string {
+			if v["channelID"] == "c1" {
+				return availAlpha
+			}
+			return `{"data":{"channel":{"viewerDropCampaigns":[]}}}`
+		},
+		"Inventory": func(map[string]any) string { return `{"errors":[{"message":"service error"}],"data":null}` },
+	})
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust"}}
+	camps, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+	require.Len(t, camps, 1)
+	assert.Equal(t, "campA", camps[0].ID)
+	assert.Equal(t, 1, b.AllowedChannelCount("campA"))
+}

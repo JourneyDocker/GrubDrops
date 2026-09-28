@@ -149,10 +149,11 @@ type inventoryData struct {
 	CurrentUser struct {
 		Inventory struct {
 			DropCampaignsInProgress []struct {
-				ID    string `json:"id"`
-				Name  string `json:"name"`
-				EndAt string `json:"endAt"`
-				Game  struct {
+				ID      string `json:"id"`
+				Name    string `json:"name"`
+				StartAt string `json:"startAt"` // read by TV channel-first discovery only
+				EndAt   string `json:"endAt"`
+				Game    struct {
 					Name string `json:"name"`
 				} `json:"game"`
 				Allow struct {

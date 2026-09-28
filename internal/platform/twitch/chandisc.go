@@ -2,8 +2,8 @@ package twitch
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
 	"github.com/aalejandrofer/grubdrops/internal/platform"
@@ -31,10 +31,11 @@ type tvBenefitEdge struct {
 type availableDropsFull struct {
 	Channel struct {
 		ViewerDropCampaigns []struct {
-			ID    string `json:"id"`
-			Name  string `json:"name"`
-			EndAt string `json:"endAt"`
-			Game  struct {
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			StartAt string `json:"startAt"`
+			EndAt   string `json:"endAt"`
+			Game    struct {
 				Name string `json:"name"`
 			} `json:"game"`
 			TimeBasedDrops []tvDrop `json:"timeBasedDrops"`
@@ -48,6 +49,21 @@ type tvDrop struct {
 	RequiredMinutesWatched int             `json:"requiredMinutesWatched"`
 	RequiredSubs           int             `json:"requiredSubs"`
 	BenefitEdges           []tvBenefitEdge `json:"benefitEdges"`
+}
+
+// windowStatus derives a campaign's Status from its start/end window, with
+// the same vocabulary the dashboard path persists: before start ->
+// "upcoming", after end -> "expired", else "active". A zero bound is
+// treated as open (payloads that omit startAt/endAt stay "active").
+func windowStatus(start, end, now time.Time) string {
+	switch {
+	case !start.IsZero() && now.Before(start):
+		return "upcoming"
+	case !end.IsZero() && now.After(end):
+		return "expired"
+	default:
+		return "active"
+	}
 }
 
 // toBenefits flattens drops the same way fetchDetails does, including
@@ -75,6 +91,7 @@ func toBenefits(campaignID string, drops []tvDrop) []platform.DropBenefit {
 // in-progress campaigns (which AvailableDrops may omit, and which carry
 // their own allow-lists). Returns campaigns + campaignID→allowed logins.
 func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, ch *channels) ([]platform.Campaign, map[string][]string, error) {
+	now := time.Now()
 	camps := map[string]*platform.Campaign{}
 	allowed := map[string][]string{}
 	order := []string{}
@@ -120,9 +137,10 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 				continue
 			}
 			for _, vc := range resp.Channel.ViewerDropCampaigns {
+				start, end := parseISO(vc.StartAt), parseISO(vc.EndAt)
 				add(platform.Campaign{
 					ID: vc.ID, Platform: "twitch", Game: vc.Game.Name, Name: vc.Name,
-					EndsAt: parseISO(vc.EndAt), Status: "active", Kind: "drop",
+					StartsAt: start, EndsAt: end, Status: windowStatus(start, end, now), Kind: "drop",
 					// Link state is unknowable without DropCampaignDetails;
 					// optimistic like scrape-sourced campaigns.
 					AccountLinked: true, AccountLinkChecked: false,
@@ -133,9 +151,13 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 		}
 	}
 
+	// A failed Inventory call must not discard the directory results:
+	// log it and continue with an empty inventory (in-progress campaigns
+	// the directory didn't surface reappear on the next pass).
 	var inv inventoryData
 	if err := d.c.gql(ctx, sess.AccessToken, OpInventory, nil, &inv); err != nil {
-		return nil, nil, fmt.Errorf("tv discovery inventory: %w", err)
+		slog.Warn("tv discovery: inventory failed; returning directory campaigns only", "err", err)
+		inv = inventoryData{}
 	}
 	for _, ic := range inv.CurrentUser.Inventory.DropCampaignsInProgress {
 		drops := make([]tvDrop, 0, len(ic.TimeBasedDrops))
@@ -147,9 +169,10 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 				BenefitEdges:           td.BenefitEdges,
 			})
 		}
+		start, end := parseISO(ic.StartAt), parseISO(ic.EndAt)
 		add(platform.Campaign{
 			ID: ic.ID, Platform: "twitch", Game: ic.Game.Name, Name: ic.Name,
-			EndsAt: parseISO(ic.EndAt), Status: "active", Kind: "drop",
+			StartsAt: start, EndsAt: end, Status: windowStatus(start, end, now), Kind: "drop",
 			AccountLinked: true, AccountLinkChecked: false,
 			Benefits: toBenefits(ic.ID, drops),
 		})
