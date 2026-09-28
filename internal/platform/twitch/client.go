@@ -57,8 +57,10 @@ type client struct {
 
 	// profiles maps an OAuth token to the client profile it was minted
 	// by. Populated by bind() at every Backend entry point; tokens are
-	// unique per client, so the map is unambiguous.
-	profiles sync.Map // token -> clientProfile
+	// unique per client, so the map is unambiguous. A pointer so the
+	// backend's client and the watch's own client share one registry
+	// (the Spade heartbeat only carries the token).
+	profiles *sync.Map // token -> clientProfile
 
 	// beaconHostAllow overrides hostAllowedForBeacon in tests only (the
 	// httptest server isn't a twitch.tv host). nil in production.
@@ -74,6 +76,7 @@ func newClient() *client {
 		http:         &http.Client{Timeout: 20 * time.Second, Jar: jar},
 		deviceID:     randomHex(16),
 		sessionID:    randomHex(16),
+		profiles:     &sync.Map{},
 	}
 	c.transport = httpTransport{c: c}
 	return c
@@ -88,6 +91,7 @@ func newClientWithTransport(transport *http.Transport) *client {
 		http:         &http.Client{Timeout: 20 * time.Second, Jar: jar, Transport: transport},
 		deviceID:     randomHex(16),
 		sessionID:    randomHex(16),
+		profiles:     &sync.Map{},
 	}
 	c.transport = httpTransport{c: c}
 	return c
@@ -102,6 +106,7 @@ func newTestClient(endpoint string) *client {
 		deviceID:     randomHex(16),
 		sessionID:    randomHex(16),
 		idBootstrap:  true,
+		profiles:     &sync.Map{},
 	}
 	c.transport = httpTransport{c: c}
 	return c
@@ -127,6 +132,7 @@ func newBrowserClient(send TwitchGQLSender, accountID string, transport *http.Tr
 		deviceID:    randomHex(16),
 		sessionID:   randomHex(16),
 		idBootstrap: true,
+		profiles:    &sync.Map{},
 	}
 	c.transport = browserTransport{send: send, accountID: accountID}
 	return c

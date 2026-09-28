@@ -152,17 +152,11 @@ var _ platform.PubSubAware = (*Backend)(nil)
 func New() *Backend {
 	c := newClient()
 	return &Backend{
-		c:     c,
-		auth:  newAuthFlow(),
-		disc:  &discovery{c: c},
-		chans: &channels{c: c},
-		// watch MUST share c with the rest of the backend: bind() records
-		// a token's client profile on this exact *client instance, and the
-		// Spade heartbeat (which carries only the token, not the session)
-		// reads it back via the same instance's profileForToken. A
-		// separate client here would silently strand every bind() and
-		// send TV-bound heartbeats under the Android profile.
-		watch:                   &watch{c: c, spadeURLs: map[string]string{}},
+		c:                       c,
+		auth:                    newAuthFlow(),
+		disc:                    &discovery{c: c},
+		chans:                   &channels{c: c},
+		watch:                   newWatch(c),
 		claim:                   &claimer{c: c},
 		adv:                     &advisory{c: c},
 		allowedLoginsByCampaign: map[string][]string{},
@@ -177,7 +171,7 @@ func NewWithTransport(transport *http.Transport) *Backend {
 		auth:                    newAuthFlowWithTransport(transport),
 		disc:                    &discovery{c: c},
 		chans:                   &channels{c: c},
-		watch:                   &watch{c: c, spadeURLs: map[string]string{}}, // see New(): must share c
+		watch:                   newWatch(c),
 		claim:                   &claimer{c: c},
 		adv:                     &advisory{c: c},
 		allowedLoginsByCampaign: map[string][]string{},
