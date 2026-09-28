@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.4.2] — 2026-09-28
+
 ### Fixed
 
 - **Twitch accounts on the older Android login keep mining when their token
