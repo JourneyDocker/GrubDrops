@@ -4,6 +4,8 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-09-28
+
 ### Fixed
 
 - **Kick accounts no longer show "needs re-auth" a week after login.** The
