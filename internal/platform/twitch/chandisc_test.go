@@ -45,6 +45,7 @@ const availAlpha = `{"data":{"channel":{"viewerDropCampaigns":[{"id":"campA","na
 
 const inventoryTV = `{"data":{"currentUser":{"inventory":{"dropCampaignsInProgress":[
  {"id":"campB","name":"Rust Isles Tac Gloves","game":{"id":"263490","name":"Rust"},"endAt":"2030-01-01T00:00:00Z",
+  "status":"ACTIVE","self":{"isAccountConnected":true},"accountLinkURL":"https://www.twitch.tv/drops/campaigns?id=campB",
   "allow":{"channels":[{"id":"c9","name":"welyn"}]},
   "timeBasedDrops":[{"id":"dG","name":"Gloves","requiredMinutesWatched":60,"requiredSubs":0,
     "benefitEdges":[{"benefit":{"id":"bG","name":"Gloves","imageAssetURL":""}}],
@@ -97,6 +98,138 @@ func TestListByChannels_TVSession(t *testing.T) {
 	assert.Equal(t, 1, b.AllowedChannelCount("campA"))
 	// Inventory campaign keeps its own allow-list.
 	assert.Equal(t, 1, b.AllowedChannelCount("campB"))
+
+	// Inventory-sourced campaigns report the real (authoritative) link
+	// state and status, not the AvailableDrops-path optimistic defaults.
+	bcamp := byID["campB"]
+	assert.True(t, bcamp.AccountLinked)
+	assert.True(t, bcamp.AccountLinkChecked, "inventory link state is authoritative, unlike AvailableDrops")
+	assert.Equal(t, "https://www.twitch.tv/drops/campaigns?id=campB", bcamp.AccountLinkURL)
+	assert.Equal(t, "active", bcamp.Status)
+}
+
+// TestListByChannels_InventoryUnlinkedAccount: an Inventory campaign with
+// self.isAccountConnected=false must report AccountLinked=false and
+// AccountLinkChecked=true (not the optimistic scrape-sourced defaults) so
+// the watcher's account-link gate can skip it -- mining a campaign the
+// user never linked can never claim.
+func TestListByChannels_InventoryUnlinkedAccount(t *testing.T) {
+	const inventoryUnlinked = `{"data":{"currentUser":{"inventory":{"dropCampaignsInProgress":[
+ {"id":"campB","name":"Rust Isles Tac Gloves","game":{"id":"263490","name":"Rust"},"endAt":"2030-01-01T00:00:00Z",
+  "self":{"isAccountConnected":false},"accountLinkURL":"https://www.twitch.tv/drops/campaigns?id=campB",
+  "allow":{"channels":[{"id":"c9","name":"welyn"}]},
+  "timeBasedDrops":[{"id":"dG","name":"Gloves","requiredMinutesWatched":60,"requiredSubs":0,
+    "benefitEdges":[{"benefit":{"id":"bG","name":"Gloves","imageAssetURL":""}}],
+    "self":{"currentMinutesWatched":14,"isClaimed":false,"dropInstanceID":"i1"}}]}],
+ "gameEventDrops":[]}}}}`
+	srv := fakeGQL(t, map[string]func(map[string]any) string{
+		"DirectoryPage_Game": func(v map[string]any) string { return dirRust },
+		"DropsHighlightService_AvailableDrops": func(v map[string]any) string {
+			return `{"data":{"channel":{"viewerDropCampaigns":[]}}}`
+		},
+		"Inventory": func(map[string]any) string { return inventoryUnlinked },
+	})
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust"}}
+	camps, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+
+	byID := map[string]platform.Campaign{}
+	for _, c := range camps {
+		byID[c.ID] = c
+	}
+	require.Contains(t, byID, "campB")
+	campB := byID["campB"]
+	assert.False(t, campB.AccountLinked, "unlinked account must not be reported as linked")
+	assert.True(t, campB.AccountLinkChecked, "inventory link state is authoritative")
+	assert.Equal(t, "https://www.twitch.tv/drops/campaigns?id=campB", campB.AccountLinkURL)
+}
+
+// TestListByChannels_InventoryOverridesAvailableDropsLinkState: when the
+// same campaign ID is seen from both AvailableDrops (optimistic, unknown
+// link state) and Inventory (authoritative, unlinked), the merged
+// campaign must report the Inventory link state, and benefits present in
+// both sources must not be duplicated.
+func TestListByChannels_InventoryOverridesAvailableDropsLinkState(t *testing.T) {
+	const inventoryUnlinkedCampA = `{"data":{"currentUser":{"inventory":{"dropCampaignsInProgress":[
+ {"id":"campA","name":"Rust Isles General","game":{"id":"263490","name":"Rust"},"endAt":"2030-01-01T00:00:00Z",
+  "self":{"isAccountConnected":false},"accountLinkURL":"https://www.twitch.tv/drops/campaigns?id=campA",
+  "timeBasedDrops":[{"id":"dWatch","name":"Box","requiredMinutesWatched":60,"requiredSubs":0,
+    "benefitEdges":[{"benefit":{"id":"bW","name":"Box","imageAssetURL":"http://img/b.png"}}],
+    "self":{"currentMinutesWatched":10,"isClaimed":false,"dropInstanceID":"iA"}}]}],
+ "gameEventDrops":[]}}}}`
+	srv := fakeGQL(t, map[string]func(map[string]any) string{
+		"DirectoryPage_Game": func(v map[string]any) string { return dirRust },
+		"DropsHighlightService_AvailableDrops": func(v map[string]any) string {
+			if v["channelID"] == "c1" {
+				return availAlpha
+			}
+			return `{"data":{"channel":{"viewerDropCampaigns":[]}}}`
+		},
+		"Inventory": func(map[string]any) string { return inventoryUnlinkedCampA },
+	})
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust"}}
+	camps, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+
+	byID := map[string]platform.Campaign{}
+	for _, c := range camps {
+		byID[c.ID] = c
+	}
+	require.Contains(t, byID, "campA")
+	campA := byID["campA"]
+	assert.False(t, campA.AccountLinked, "Inventory's authoritative link state must win over AvailableDrops' optimistic default")
+	assert.True(t, campA.AccountLinkChecked)
+
+	seen := map[string]int{}
+	for _, bn := range campA.Benefits {
+		seen[bn.ID]++
+	}
+	assert.Equal(t, 1, seen["dWatch"], "benefit seen from both sources must not be duplicated")
+	assert.Equal(t, 1, seen["dSub"], "AvailableDrops-only benefit must be kept")
+	assert.Len(t, campA.Benefits, 2)
+}
+
+// TestListByChannels_InventoryStatusOverridesWindow: Inventory's own
+// status enum ("ACTIVE"/"UPCOMING"/"EXPIRED") is authoritative and maps
+// exactly like the dashboard path (listActive) -- it takes precedence
+// over the startAt/endAt window heuristic used when Twitch omits status.
+func TestListByChannels_InventoryStatusOverridesWindow(t *testing.T) {
+	const inventoryExpired = `{"data":{"currentUser":{"inventory":{"dropCampaignsInProgress":[
+ {"id":"campB","name":"Rust Isles Tac Gloves","game":{"id":"263490","name":"Rust"},
+  "startAt":"2020-01-01T00:00:00Z","endAt":"2030-01-01T00:00:00Z",
+  "status":"EXPIRED","self":{"isAccountConnected":true},"accountLinkURL":"",
+  "timeBasedDrops":[{"id":"dG","name":"Gloves","requiredMinutesWatched":60,"requiredSubs":0,
+    "benefitEdges":[{"benefit":{"id":"bG","name":"Gloves","imageAssetURL":""}}],
+    "self":{"currentMinutesWatched":14,"isClaimed":false,"dropInstanceID":"i1"}}]}],
+ "gameEventDrops":[]}}}}`
+	srv := fakeGQL(t, map[string]func(map[string]any) string{
+		"DirectoryPage_Game": func(v map[string]any) string { return dirRust },
+		"DropsHighlightService_AvailableDrops": func(v map[string]any) string {
+			return `{"data":{"channel":{"viewerDropCampaigns":[]}}}`
+		},
+		"Inventory": func(map[string]any) string { return inventoryExpired },
+	})
+	defer srv.Close()
+
+	b := newForTest(srv.URL)
+	sess := platform.Session{AccessToken: "tv", ClientID: ClientTV, Games: []string{"Rust"}}
+	camps, err := b.ListActiveCampaigns(context.Background(), sess)
+	require.NoError(t, err)
+
+	byID := map[string]platform.Campaign{}
+	for _, c := range camps {
+		byID[c.ID] = c
+	}
+	require.Contains(t, byID, "campB")
+	// Window alone (startAt in the past, endAt in the future) would say
+	// "active" -- status "EXPIRED" must win.
+	assert.Equal(t, "expired", byID["campB"].Status)
 }
 
 // TestListByChannels_DedupesGamesBySlug proves duplicate whitelist tokens

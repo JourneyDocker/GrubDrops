@@ -3,6 +3,7 @@ package twitch
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/aalejandrofer/grubdrops/internal/gameslug"
@@ -63,6 +64,27 @@ func windowStatus(start, end, now time.Time) string {
 		return "expired"
 	default:
 		return "active"
+	}
+}
+
+// campaignStatus derives an Inventory campaign's Status. Inventory's own
+// status enum is authoritative when present and is mapped exactly like
+// listActive maps the dashboard's status ("ACTIVE"->"active",
+// "EXPIRED"->"expired", "UPCOMING"->"upcoming", anything else
+// lower-cased). When Twitch omits status (empty string), fall back to
+// the startAt/endAt window heuristic.
+func campaignStatus(status string, start, end, now time.Time) string {
+	switch status {
+	case "ACTIVE":
+		return "active"
+	case "UPCOMING":
+		return "upcoming"
+	case "EXPIRED":
+		return "expired"
+	case "":
+		return windowStatus(start, end, now)
+	default:
+		return strings.ToLower(status)
 	}
 }
 
@@ -170,12 +192,38 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 			})
 		}
 		start, end := parseISO(ic.StartAt), parseISO(ic.EndAt)
-		add(platform.Campaign{
-			ID: ic.ID, Platform: "twitch", Game: ic.Game.Name, Name: ic.Name,
-			StartsAt: start, EndsAt: end, Status: windowStatus(start, end, now), Kind: "drop",
-			AccountLinked: true, AccountLinkChecked: false,
-			Benefits: toBenefits(ic.ID, drops),
-		})
+		status := campaignStatus(ic.Status, start, end, now)
+		benefits := toBenefits(ic.ID, drops)
+
+		// Inventory is authoritative for link state + status. When the
+		// same campaign ID was already added from AvailableDrops
+		// (optimistic, unknown link state), override those fields on
+		// the existing entry instead of discarding Inventory's data —
+		// and merge benefits by ID so a drop present in both payloads
+		// isn't duplicated.
+		if ex, ok := camps[ic.ID]; ok {
+			ex.AccountLinked = ic.Self.IsAccountConnected
+			ex.AccountLinkChecked = true
+			ex.AccountLinkURL = ic.AccountLinkURL
+			ex.Status = status
+			seen := make(map[string]struct{}, len(ex.Benefits))
+			for _, b := range ex.Benefits {
+				seen[b.ID] = struct{}{}
+			}
+			for _, b := range benefits {
+				if _, dup := seen[b.ID]; dup {
+					continue
+				}
+				ex.Benefits = append(ex.Benefits, b)
+			}
+		} else {
+			add(platform.Campaign{
+				ID: ic.ID, Platform: "twitch", Game: ic.Game.Name, Name: ic.Name,
+				StartsAt: start, EndsAt: end, Status: status, Kind: "drop",
+				AccountLinked: ic.Self.IsAccountConnected, AccountLinkChecked: true, AccountLinkURL: ic.AccountLinkURL,
+				Benefits: benefits,
+			})
+		}
 		if len(ic.Allow.Channels) > 0 {
 			var logins []string
 			for _, c := range ic.Allow.Channels {

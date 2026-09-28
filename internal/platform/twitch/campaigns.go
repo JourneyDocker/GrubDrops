@@ -153,7 +153,17 @@ type inventoryData struct {
 				Name    string `json:"name"`
 				StartAt string `json:"startAt"` // read by TV channel-first discovery only
 				EndAt   string `json:"endAt"`
-				Game    struct {
+				// Status, Self.IsAccountConnected and AccountLinkURL are
+				// read by TV channel-first discovery only (listByChannels).
+				// Inventory is authoritative for in-progress campaigns:
+				// unlike AvailableDrops (which carries no link/self
+				// fields at all), Twitch always populates these here.
+				Status         string `json:"status"` // "ACTIVE" | "EXPIRED" | "UPCOMING"
+				AccountLinkURL string `json:"accountLinkURL"`
+				Self           struct {
+					IsAccountConnected bool `json:"isAccountConnected"`
+				} `json:"self"`
+				Game struct {
 					Name string `json:"name"`
 				} `json:"game"`
 				Allow struct {
