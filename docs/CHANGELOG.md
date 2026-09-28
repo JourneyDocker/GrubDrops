@@ -4,6 +4,14 @@ All notable changes to GrubDrops.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Twitch accounts on the older Android login keep mining when their token
+  can't be refreshed.** Twitch now rejects refreshes for that login, so an
+  account whose token had passed its expiry time sat idle at every restart
+  even though the token still worked. GrubDrops now checks the token first
+  and keeps using it while it's valid.
+
 ## [1.4.1] — 2026-09-28
 
 ### Fixed
