@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/alexedwards/scs/v2"
 
 	"github.com/JourneyDocker/grubdrops/internal/store"
 	"github.com/JourneyDocker/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/timeutil"
 	"github.com/JourneyDocker/grubdrops/internal/web"
 )
 
@@ -223,6 +228,209 @@ func TestSettingsTabs_GeneralSectionOnly(t *testing.T) {
 	if strings.Contains(out, `name="discord_webhook"`) {
 		t.Errorf("general tab should NOT show notifications")
 	}
+	// The time-format selector lives on the general tab, beside the timezone
+	// control, and posts to its own endpoint.
+	for _, want := range []string{
+		`name="timezone"`,
+		`name="time_format"`,
+		`action="/settings/time-format"`,
+		`value="12"`,
+		`value="24"`,
+		`name="csrf_token"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("general tab time-format control missing %q", want)
+		}
+	}
+}
+
+// newTimeFormatDeps wires a settings page backed by a real sqlite store so a
+// POST → store → re-render round trip can be asserted end to end.
+func newTimeFormatDeps(t *testing.T) (*settingsDeps, *scs.SessionManager) {
+	t.Helper()
+	s, q := newTestSettings(t)
+	tmpl, err := web.Templates()
+	if err != nil {
+		t.Fatalf("load templates: %v", err)
+	}
+	sm := scs.New()
+	// The display clock is a process-wide singleton; restore it so one test
+	// cannot leak its choice into another.
+	prev := timeutil.Display.Format()
+	t.Cleanup(func() { timeutil.Display.Set(prev) })
+	displayClock = timeutil.Display
+	return &settingsDeps{
+		s:   s,
+		q:   q,
+		t:   tmpl,
+		sm:  sm,
+		loc: timeutil.NewZone(time.UTC),
+	}, sm
+}
+
+// postTimeFormat submits the form and returns the recorder + flash context.
+func postTimeFormatDo(t *testing.T, d *settingsDeps, sm *scs.SessionManager, body string) (*httptest.ResponseRecorder, context.Context) {
+	t.Helper()
+	req, ctx := loadSession(t, sm, formPost("/settings/time-format", body))
+	rec := httptest.NewRecorder()
+	d.postTimeFormat(rec, req)
+	return rec, ctx
+}
+
+func TestPostTimeFormat_RoundTrip(t *testing.T) {
+	d, sm := newTimeFormatDeps(t)
+	ctx := context.Background()
+
+	// Default: 24-hour everywhere.
+	if got, _ := d.s.TimeFormat(ctx); got != store.TimeFormat24 {
+		t.Fatalf("default time format = %q, want %q", got, store.TimeFormat24)
+	}
+	if timeutil.Display.Hour12() {
+		t.Fatal("display clock should start 24-hour")
+	}
+
+	rec, _ := postTimeFormatDo(t, d, sm, "time_format=12")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST 12 → status %d, want 303", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/settings" {
+		t.Errorf("redirect = %q, want /settings", loc)
+	}
+	if got, _ := d.s.TimeFormat(ctx); got != store.TimeFormat12 {
+		t.Fatalf("stored time format = %q, want %q", got, store.TimeFormat12)
+	}
+	// Live swap: the running UI (and the client clock) flips with no restart.
+	if !timeutil.Display.Hour12() {
+		t.Fatal("display clock did not swap to 12-hour")
+	}
+
+	// The re-rendered general tab reflects the new state.
+	out := renderGeneralTab(t, d, sm)
+	if !strings.Contains(out, `<option value="12" selected>`) {
+		t.Errorf("general tab should show 12-hour selected; got:\n%s", timeFormatSelect(out))
+	}
+	if strings.Contains(out, `<option value="24" selected>`) {
+		t.Error("general tab should not also show 24-hour selected")
+	}
+
+	// And back to 24-hour.
+	rec, _ = postTimeFormatDo(t, d, sm, "time_format=24")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST 24 → status %d, want 303", rec.Code)
+	}
+	if got, _ := d.s.TimeFormat(ctx); got != store.TimeFormat24 {
+		t.Fatalf("stored time format = %q, want %q", got, store.TimeFormat24)
+	}
+	if timeutil.Display.Hour12() {
+		t.Fatal("display clock did not swap back to 24-hour")
+	}
+	out = renderGeneralTab(t, d, sm)
+	if !strings.Contains(out, `<option value="24" selected>`) {
+		t.Errorf("general tab should show 24-hour selected; got:\n%s", timeFormatSelect(out))
+	}
+}
+
+func TestPostTimeFormat_InvalidValueLeavesStateUntouched(t *testing.T) {
+	d, sm := newTimeFormatDeps(t)
+	ctx := context.Background()
+	if err := d.s.SetTimeFormat(ctx, store.TimeFormat24); err != nil {
+		t.Fatal(err)
+	}
+
+	rec, flashCtx := postTimeFormatDo(t, d, sm, "time_format=am%2Fpm")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("invalid value → status %d, want a 303 back to the form", rec.Code)
+	}
+	if got, _ := d.s.TimeFormat(ctx); got != store.TimeFormat24 {
+		t.Fatalf("rejected value was persisted: %q", got)
+	}
+	if timeutil.Display.Hour12() {
+		t.Fatal("rejected value swapped the live display clock")
+	}
+	if flash := sm.GetString(flashCtx, "flash"); flash != "flash.time_format_invalid" {
+		t.Errorf("flash = %q, want flash.time_format_invalid", flash)
+	}
+}
+
+func TestPostTimeFormat_FailedWriteNotReportedAsSuccess(t *testing.T) {
+	s, q := brokenSettings(t)
+	sm := scs.New()
+	prev := timeutil.Display.Format()
+	t.Cleanup(func() { timeutil.Display.Set(prev) })
+	d := &settingsDeps{s: s, q: q, sm: sm}
+
+	req, ctx := loadSession(t, sm, formPost("/settings/time-format", "time_format=12"))
+	rec := httptest.NewRecorder()
+	d.postTimeFormat(rec, req)
+
+	if rec.Code == http.StatusSeeOther {
+		t.Fatalf("failed save reported as success (303 redirect)")
+	}
+	if flash := strings.ToLower(sm.GetString(ctx, "flash")); strings.Contains(flash, "saved") {
+		t.Fatalf("failed save left a success flash: %q", flash)
+	}
+	if timeutil.Display.Hour12() {
+		t.Fatal("failed save still swapped the live display clock")
+	}
+}
+
+// TestPostTimeFormat_OnUpdateCalled proves the settings-change hook still
+// fires, so anything re-reading the setting on reload stays in sync.
+func TestPostTimeFormat_OnUpdateCalled(t *testing.T) {
+	d, sm := newTimeFormatDeps(t)
+	calls := 0
+	d.onUpdate = func() { calls++ }
+	postTimeFormatDo(t, d, sm, "time_format=12")
+	if calls != 1 {
+		t.Fatalf("onUpdate called %d times, want 1", calls)
+	}
+}
+
+// TestPostTimeFormat_LayoutFollowsTheSetting proves the shared time layout
+// strings (used by the drops/history/dashboard call sites) flip with the
+// setting — i.e. the helpers are actually wired to the live clock.
+func TestPostTimeFormat_LayoutFollowsTheSetting(t *testing.T) {
+	d, sm := newTimeFormatDeps(t)
+	loc := timeutil.NewZone(time.UTC)
+	ts := time.Date(2026, 9, 28, 15, 4, 5, 0, time.UTC)
+
+	if got, want := timeutil.FormatDateTime(ts, loc.Location()), "2026-09-28 15:04 UTC"; got != want {
+		t.Errorf("24h date+time = %q, want %q", got, want)
+	}
+	postTimeFormatDo(t, d, sm, "time_format=12")
+	if got, want := timeutil.FormatDateTime(ts, loc.Location()), "2026-09-28 3:04 PM UTC"; got != want {
+		t.Errorf("12h date+time = %q, want %q", got, want)
+	}
+	if got, want := timeutil.FormatClock(ts, loc.Location()), "3:04:05 PM"; got != want {
+		t.Errorf("12h clock = %q, want %q", got, want)
+	}
+}
+
+// renderGeneralTab renders the settings general tab through the real handler
+// so the assertion covers renderTab's store read, not just the template.
+func renderGeneralTab(t *testing.T, d *settingsDeps, sm *scs.SessionManager) string {
+	t.Helper()
+	req, _ := loadSession(t, sm, httptest.NewRequest("GET", "/settings", nil))
+	rec := httptest.NewRecorder()
+	d.renderTab(rec, req, "settings")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("render general tab: status %d, body:\n%s", rec.Code, rec.Body.String())
+	}
+	return rec.Body.String()
+}
+
+// timeFormatSelect trims the rendered page down to the select element so a
+// failing assertion prints something readable.
+func timeFormatSelect(page string) string {
+	i := strings.Index(page, `<select name="time_format">`)
+	if i < 0 {
+		return "(no time_format select rendered)"
+	}
+	rest := page[i:]
+	if j := strings.Index(rest, "</select>"); j >= 0 {
+		return rest[:j+len("</select>")]
+	}
+	return rest
 }
 
 func TestSettingsTabs_PrioritySection(t *testing.T) {
@@ -346,5 +554,115 @@ func TestCanaryPanelFragment(t *testing.T) {
 	}
 	if !strings.Contains(out, `hx-post="/settings/canary/run"`) {
 		t.Errorf("canary_panel fragment: Run-now button missing")
+	}
+}
+
+// unlinkedCardIs reports whether the rendered priority tab contains the
+// global unlinked-mining card, and with which hidden `enabled` value.
+func unlinkedCardIs(t *testing.T, page settingsPageData) (present bool, hidden string) {
+	t.Helper()
+	out := renderSettingsTab(t, "priority", page)
+	form := `action="/settings/mine-unlinked-global"`
+	i := strings.Index(out, form)
+	if i < 0 {
+		return false, ""
+	}
+	rest := out[i:]
+	// Hidden `enabled` input is the first one after the form's action.
+	j := strings.Index(rest, `name="enabled"`)
+	if j < 0 {
+		return true, ""
+	}
+	rest = rest[j:]
+	k := strings.Index(rest, `value="`)
+	if k < 0 {
+		return true, ""
+	}
+	v := rest[k+len(`value="`):]
+	return true, v[:strings.Index(v, `"`)]
+}
+
+// TestSettingsTabs_PriorityUnlinkedCard proves the priority tab renders the
+// global unlinked-mining card wired to its own endpoint, with the hidden
+// `enabled` value flipped so the button submits the opposite of the state.
+func TestSettingsTabs_PriorityUnlinkedCard(t *testing.T) {
+	present, hidden := unlinkedCardIs(t, settingsPageData{MineUnlinkedGlobal: false})
+	if !present {
+		t.Fatalf("priority tab should render the global unlinked card")
+	}
+	if hidden != "1" {
+		t.Errorf("card OFF should post enabled=1 to switch on, got %q", hidden)
+	}
+	// The card must also carry the OR-semantics hint so the operator knows a
+	// per-account opt-in is never suppressed.
+	if !strings.Contains(renderSettingsTab(t, "priority", settingsPageData{}), "Force unlinked mining for all accounts") {
+		t.Errorf("card should include the global override semantics hint")
+	}
+
+	present, hidden = unlinkedCardIs(t, settingsPageData{MineUnlinkedGlobal: true})
+	if !present {
+		t.Fatalf("card should render when ON too")
+	}
+	if hidden != "0" {
+		t.Errorf("card ON should post enabled=0 to switch off, got %q", hidden)
+	}
+}
+
+// TestPostMineUnlinkedGlobal_Persists proves the toggle persists to the
+// settings store, re-spins the scheduler (watchers snapshot the value at
+// build time), flashes, and redirects back to /priority.
+func TestPostMineUnlinkedGlobal_Persists(t *testing.T) {
+	s, q := newTestSettings(t)
+	sm := scs.New()
+	reloads := 0
+	d := &settingsDeps{s: s, q: q, sm: sm, reload: func(context.Context) error {
+		reloads++
+		return nil
+	}}
+
+	// Enable.
+	req, ctx := loadSession(t, sm, formPost("/settings/mine-unlinked-global", "enabled=1"))
+	rec := httptest.NewRecorder()
+	d.postMineUnlinkedGlobal(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect, got %d", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/priority" {
+		t.Errorf("expected redirect to /priority, got %q", loc)
+	}
+	if got, _ := s.MineUnlinkedGlobal(ctx); !got {
+		t.Fatalf("global override should be persisted on after enabling")
+	}
+	if reloads != 1 {
+		t.Errorf("watchers should be reloaded so the toggle applies live, got %d reloads", reloads)
+	}
+	if got := sm.GetString(ctx, "flash"); got != "flash.mine_unlinked_global_enabled" {
+		t.Errorf("unexpected flash after enabling: %q", got)
+	}
+
+	// The tab re-renders in the new state (this is what renderTab feeds the
+	// template: the store read above).
+	on := settingsPageData{MineUnlinkedGlobal: true}
+	if present, hidden := unlinkedCardIs(t, on); !present || hidden != "0" {
+		t.Errorf("re-render after enable should show enabled=0, got present=%v hidden=%q", present, hidden)
+	}
+
+	// Disable.
+	req, ctx = loadSession(t, sm, formPost("/settings/mine-unlinked-global", "enabled=0"))
+	rec = httptest.NewRecorder()
+	d.postMineUnlinkedGlobal(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect on disable, got %d", rec.Code)
+	}
+	if got, _ := s.MineUnlinkedGlobal(ctx); got {
+		t.Fatalf("global override should be off after disabling")
+	}
+	if got := sm.GetString(ctx, "flash"); got != "flash.mine_unlinked_global_disabled" {
+		t.Errorf("unexpected flash after disabling: %q", got)
+	}
+	if present, hidden := unlinkedCardIs(t, settingsPageData{}); !present || hidden != "1" {
+		t.Errorf("re-render after disable should show enabled=1, got present=%v hidden=%q", present, hidden)
 	}
 }

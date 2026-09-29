@@ -104,6 +104,21 @@
         </div>
       </form>
     </section>
+
+    <section class="settings-card">
+      <header class="section-h"><h3>{{t "priority.unlinked_title"}}</h3></header>
+      <p class="hint" style="margin:0 0 14px;">{{t "priority.unlinked_desc"}}</p>
+      <p class="hint" style="margin:0 0 14px;color:var(--accent);">⚠ {{t "priority.unlinked_warning"}}</p>
+      <form method="post" action="/settings/mine-unlinked-global">
+        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+        <input type="hidden" name="enabled" value="{{if .MineUnlinkedGlobal}}0{{else}}1{{end}}">
+        <div class="kvedit"><div class="row">
+          <span class="k">{{t "priority.unlinked_global_hint"}}</span>
+          <span class="d">{{if .MineUnlinkedGlobal}}{{t "priority.unlinked_on"}}{{else}}{{t "priority.unlinked_off"}}{{end}}</span>
+          <button class="btn-linear" type="submit">{{if .MineUnlinkedGlobal}}{{t "priority.unlinked_disable"}}{{else}}{{t "priority.unlinked_enable"}}{{end}} →</button>
+        </div></div>
+      </form>
+    </section>
     {{end}}
 
     {{if eq $.Active "notifications"}}
@@ -245,6 +260,16 @@
               <option value="Asia/Singapore"></option>
               <option value="Australia/Sydney"></option>
             </datalist>
+          </span>
+        </form>
+        <form method="post" action="/settings/time-format" class="row" style="align-items:center;justify-content:space-between;" onchange="this.submit()">
+          <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+          <span class="k">{{t "runtime.time_format"}}</span>
+          <span class="v">
+            <select name="time_format">
+              <option value="24" {{if ne .TimeFormat "12"}}selected{{end}}>{{t "runtime.time_format_24"}}</option>
+              <option value="12" {{if eq .TimeFormat "12"}}selected{{end}}>{{t "runtime.time_format_12"}}</option>
+            </select>
           </span>
         </form>
       </div>

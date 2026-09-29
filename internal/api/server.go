@@ -28,6 +28,13 @@ import (
 // client-side header clock reads it). Nil-safe: render() falls back to UTC.
 var displayZone *timeutil.Zone
 
+// displayClock is the process-wide 12/24-hour clock format, seeded from the
+// persisted Time Format setting in NewRouter and swapped live when the setting
+// changes (so no restart is needed). It aliases timeutil.Display, which is the
+// single source of truth for the time layout strings used by the handlers.
+// Never nil: render() falls back to the 24-hour default.
+var displayClock = timeutil.Display
+
 // applyRedirectTarget picks the post-/accounts/apply landing page from
 // the Referer header. The dashboard also has a Reload button, so we
 // avoid the old behavior of always bouncing the user to /accounts:
@@ -147,6 +154,16 @@ func NewRouter(d Deps) http.Handler {
 
 	// Publish the display timezone for the shared render path (header clock).
 	displayZone = d.Zone
+
+	// Seed the 12/24-hour display clock from the persisted setting, and keep
+	// the package-level holder aliased to the timeutil singleton that the
+	// handlers format timestamps through.
+	displayClock = timeutil.Display
+	if d.SettingsStore != nil {
+		if format, err := d.SettingsStore.TimeFormat(context.Background()); err == nil {
+			displayClock.Set(format)
+		}
+	}
 
 	setup := setupDeps{q: d.Q, t: d.Templates, sm: d.Session}
 	oidcEnabled := d.OIDC != nil && d.OIDC.Enabled()
@@ -342,7 +359,7 @@ func NewRouter(d Deps) http.Handler {
 		version:     d.Version,
 		oidc:        d.OIDC,
 	}
-	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Zone, sm: d.Session}
+	dropsH := &dropsDeps{q: d.Q, t: d.Templates, reload: d.Reload, sessions: d.Sessions, registry: d.Registry, loc: d.Zone, sm: d.Session, s: d.SettingsStore}
 	historyH := &historyDeps{q: d.Q, ring: d.LogRing, t: d.Templates, loc: d.Zone}
 
 	authed.Get("/settings", settingsH.get)
@@ -354,6 +371,8 @@ func NewRouter(d Deps) http.Handler {
 	authed.Get("/settings/health", settingsH.getHealth)
 	authed.Post("/settings", settingsH.postGeneral)
 	authed.Post("/settings/priority-mode", settingsH.postPriorityMode)
+	authed.Post("/settings/time-format", settingsH.postTimeFormat)
+	authed.Post("/settings/mine-unlinked-global", settingsH.postMineUnlinkedGlobal)
 	authed.Post("/settings/experimental", settingsH.postExperimental)
 	authed.Post("/settings/notifications", settingsH.postNotifications)
 	authed.Post("/settings/global-games", settingsH.globalGamesPost)

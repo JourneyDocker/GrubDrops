@@ -113,7 +113,7 @@ func (d accountsDeps) list(w http.ResponseWriter, r *http.Request) {
 			row.AuthChecked = true
 			row.AuthOK = res.OK
 			row.AuthMsg = res.Msg
-			row.AuthWhen = time.Unix(res.CheckedAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST")
+			row.AuthWhen = timeutil.FormatDateTime(time.Unix(res.CheckedAt, 0), d.loc.Location())
 		}
 		enriched = append(enriched, row)
 	}

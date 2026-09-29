@@ -105,12 +105,16 @@ type settingsPageData struct {
 	DiscoveryIntervalMin int
 	PriorityMode         string // "ordered" | "ending_soonest"
 	KickWatchMode        string // "browser" | "ws" (experimental)
-	NotifyClaim          bool
-	NotifyProgress       bool
-	NotifyAuth           bool
-	NotifyError          bool
-	NotifyCanary         bool
-	ProgressNotifyStep   int // milestone % step for progress notifications (0 = off)
+	// MineUnlinkedGlobal is the global force-on override for mining
+	// campaigns Twitch reports as unlinked. It is OR-ed with each account's
+	// own toggle by the miner, so an account's opt-in is never suppressed.
+	MineUnlinkedGlobal bool
+	NotifyClaim        bool
+	NotifyProgress     bool
+	NotifyAuth         bool
+	NotifyError        bool
+	NotifyCanary       bool
+	ProgressNotifyStep int // milestone % step for progress notifications (0 = off)
 
 	// Global priority list — used as fallback when an account has no
 	// per-account whitelist rows.
@@ -147,6 +151,10 @@ type settingsPageData struct {
 	// TimezoneEffective is the zone actually in effect now (setting → TZ env →
 	// UTC), shown as a hint so the operator sees what "unset" resolves to.
 	TimezoneEffective string
+	// TimeFormat is the 12/24-hour clock preference: store.TimeFormat24
+	// (default) or store.TimeFormat12. Clock times only — the date part and
+	// the zone abbreviation are unaffected.
+	TimeFormat string
 }
 
 func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active string) {
@@ -160,6 +168,9 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 	discIv, _ := d.s.DiscoveryIntervalMin(ctx)
 	prio, _ := d.s.PriorityMode(ctx)
 	kickWatch, _ := d.s.KickWatchMode(ctx)
+	// Same degradation as PriorityMode above: a failed read renders the
+	// card in its "off" state rather than 500ing the whole page.
+	mineUnlinkedGlobal, _ := d.s.MineUnlinkedGlobal(ctx)
 	var sidecars []string
 	if d.sidecars != nil {
 		sidecars = d.sidecars()
@@ -218,6 +229,13 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 		tzEffective = d.loc.Name()
 	}
 
+	// Same degradation as PriorityMode above: a failed read renders the
+	// 24-hour default rather than 500ing the whole page.
+	timeFormat := store.TimeFormat24
+	if tf, err := d.s.TimeFormat(ctx); err == nil {
+		timeFormat = tf
+	}
+
 	render(w, r, d.t, "settings.html", templateData{
 		AuthedAdmin: true, CSRFToken: csrfToken(r), Active: active,
 		Page: settingsPageData{
@@ -230,6 +248,7 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			DiscoveryIntervalMin: discIv,
 			PriorityMode:         prio,
 			KickWatchMode:        kickWatch,
+			MineUnlinkedGlobal:   mineUnlinkedGlobal,
 			GlobalGames:          globalGames,
 			AllGames:             allGames,
 			NotifyClaim:          nc,
@@ -255,6 +274,7 @@ func (d *settingsDeps) renderTab(w http.ResponseWriter, r *http.Request, active 
 			ProxyEnabled:         proxyEnabled,
 			Timezone:             tz,
 			TimezoneEffective:    tzEffective,
+			TimeFormat:           timeFormat,
 		},
 		Flash: flash,
 	})
@@ -357,6 +377,33 @@ func (d *settingsDeps) postGeneral(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
+// postTimeFormat handles POST /settings/time-format — switches every clock
+// time in the UI between 12-hour and 24-hour. The value is validated and
+// persisted first; only then is the live display clock swapped, so a rejected
+// value leaves the running UI (and the stored setting) untouched. Scope is
+// clock times only — the date part and the zone abbreviation are unaffected.
+func (d *settingsDeps) postTimeFormat(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	format := strings.TrimSpace(r.FormValue("time_format"))
+	if format != store.TimeFormat12 && format != store.TimeFormat24 {
+		// Unloadable value: flash + redirect, never a 500, and do not swap.
+		d.sm.Put(ctx, "flash", "flash.time_format_invalid")
+		http.Redirect(w, r, "/settings", http.StatusSeeOther)
+		return
+	}
+	if saveErr(w, d.s.SetTimeFormat(ctx, format)) {
+		return
+	}
+	// Live swap so every already-loaded page and the header clock pick the new
+	// format up on their next render — no restart.
+	displayClock.Set(format)
+	if d.onUpdate != nil {
+		d.onUpdate()
+	}
+	d.sm.Put(ctx, "flash", "flash.time_format_saved")
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
 // postNotifications saves the Notifications tab: webhook, avatar, notify kinds.
 func (d *settingsDeps) postNotifications(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -405,6 +452,30 @@ func (d *settingsDeps) postPriorityMode(w http.ResponseWriter, r *http.Request) 
 		d.onUpdate()
 	}
 	d.sm.Put(ctx, "flash", "flash.priority_mode_saved")
+	http.Redirect(w, r, "/priority", http.StatusSeeOther)
+}
+
+// postMineUnlinkedGlobal handles POST /settings/mine-unlinked-global — flips
+// the GLOBAL force-on override for mining unlinked campaigns. The miner ORs
+// this with each account's own toggle when building a watcher, so turning it
+// on never suppresses an account's individual opt-in.
+func (d *settingsDeps) postMineUnlinkedGlobal(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	enabled := r.FormValue("enabled") == "1"
+	if saveErr(w, d.s.SetMineUnlinkedGlobal(ctx, enabled)) {
+		return
+	}
+	if d.onUpdate != nil {
+		d.onUpdate()
+	}
+	// The watcher snapshots MineUnlinked at build time, so re-spin the
+	// scheduler to make the toggle take effect without a restart.
+	d.applyReload(ctx)
+	if enabled {
+		d.sm.Put(ctx, "flash", "flash.mine_unlinked_global_enabled")
+	} else {
+		d.sm.Put(ctx, "flash", "flash.mine_unlinked_global_disabled")
+	}
 	http.Redirect(w, r, "/priority", http.StatusSeeOther)
 }
 

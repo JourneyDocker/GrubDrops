@@ -37,6 +37,19 @@ const (
 	keyLatestRelease       = "settings:latest_release"     // most recent GitHub release tag
 	keyLastReleaseCheck    = "settings:last_release_check" // unix seconds of last successful check
 	keyTimezone            = "settings:timezone"           // IANA display timezone (empty = use TZ env/UTC)
+	keyMineUnlinkedGlobal  = "settings:mine_unlinked"      // global override: mine campaigns with no linked account
+	keyTimeFormat          = "settings:time_format"        // 12/24-hour clock display ("24" = default)
+)
+
+// TimeFormat selects the 12/24-hour clock shown for every timestamp in the UI.
+//   - "24" (default): 24-hour clock, e.g. "2026-09-28 15:04 UTC".
+//   - "12": 12-hour clock with an AM/PM suffix, e.g. "2026-09-28 3:04 PM UTC".
+//
+// Scope is the clock time only — the date part and the timezone abbreviation
+// are unaffected. An unset (or unreadable) setting means 24-hour.
+const (
+	TimeFormat24 = "24"
+	TimeFormat12 = "12"
 )
 
 // KickWatchMode selects how Kick watch-time is accrued.
@@ -376,6 +389,27 @@ func (s *Settings) SetProxyEnabled(ctx context.Context, enabled bool) error {
 	return s.setString(ctx, keyProxyEnabled, "0")
 }
 
+// MineUnlinkedGlobal reports whether the global override is on: mine whitelisted
+// campaigns that no account has linked. Default false.
+//
+// This is a force-on override, not a tri-state. It is OR-ed with the
+// per-account "mine unlinked" flag at watcher build time, so it can only widen
+// what is mined, never narrow an account's own opt-in.
+func (s *Settings) MineUnlinkedGlobal(ctx context.Context) (bool, error) {
+	v, err := s.getString(ctx, keyMineUnlinkedGlobal)
+	if err != nil || v == "" {
+		return false, err
+	}
+	return v == "1", nil
+}
+
+func (s *Settings) SetMineUnlinkedGlobal(ctx context.Context, enabled bool) error {
+	if enabled {
+		return s.setString(ctx, keyMineUnlinkedGlobal, "1")
+	}
+	return s.setString(ctx, keyMineUnlinkedGlobal, "0")
+}
+
 // LatestRelease is the most recent GitHub release tag the update checker saw
 // (e.g. "v1.3.5"). Empty when no check has succeeded yet.
 func (s *Settings) LatestRelease(ctx context.Context) (string, error) {
@@ -419,4 +453,31 @@ func (s *Settings) SetTimezone(ctx context.Context, name string) error {
 		return fmt.Errorf("invalid timezone %q", name)
 	}
 	return s.setString(ctx, keyTimezone, name)
+}
+
+// TimeFormat is the 12/24-hour clock preference (TimeFormat24 or TimeFormat12).
+// The default is TimeFormat24: when the setting has never been written (or was
+// cleared) the UI shows a 24-hour clock.
+func (s *Settings) TimeFormat(ctx context.Context) (string, error) {
+	v, err := s.getString(ctx, keyTimeFormat)
+	if err != nil {
+		return TimeFormat24, err
+	}
+	if v == TimeFormat12 {
+		return TimeFormat12, nil
+	}
+	return TimeFormat24, nil
+}
+
+// SetTimeFormat validates and persists the 12/24-hour clock preference.
+// Whitespace is trimmed; anything that is not TimeFormat12 or TimeFormat24 is
+// rejected so a bad value never reaches the display (the stored value is left
+// untouched and the caller can flash an error).
+func (s *Settings) SetTimeFormat(ctx context.Context, format string) error {
+	format = strings.TrimSpace(format)
+	switch format {
+	case TimeFormat24, TimeFormat12:
+		return s.setString(ctx, keyTimeFormat, format)
+	}
+	return fmt.Errorf("invalid time format %q", format)
 }

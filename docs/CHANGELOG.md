@@ -10,6 +10,29 @@ All notable changes to GrubDrops.
   mining" toggle that mines whitelisted games even when Twitch reports the game
   as not connected, for games linked through other means where drops still
   accrue.
+- **Global unlinked mining override.** The Drop Priority page has an "Unlinked
+  mining (global)" toggle that turns the option on for every account at once. It
+  is OR-ed with the per-account toggle, so an account's own opt-in is never
+  suppressed — the global switch can only widen what is mined.
+- **12-hour / 24-hour clock setting.** Settings → General has a "Time format"
+  control that switches every clock time in the UI, including the header clock.
+  Defaults to 24-hour. Dates and the timezone abbreviation are unaffected, so
+  this is clock times only. Changing it takes effect immediately, no restart.
+
+### Changed
+
+- **The Drops page no longer lists campaigns as "not mined" when they are.**
+  A whitelisted campaign with no linked account is now counted as mineable
+  whenever unlinked mining is on for it, globally or per-account, so it appears
+  in the main table. The "Whitelisted — account not linked" section is left only
+  for campaigns that genuinely will not be mined.
+
+### Fixed
+
+- **The update check no longer fails.** It polled this fork's releases, which
+  are not published, so every check errored. It now polls upstream
+  (`aalejandrofer/GrubDrops`) and the badge tooltip notes that an upstream
+  release may not be in this build yet.
 
 ## [1.4.2] — 2026-09-28
 

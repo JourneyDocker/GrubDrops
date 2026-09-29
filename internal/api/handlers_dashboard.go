@@ -1030,11 +1030,11 @@ func (d dashboardDeps) campaignDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	startsAt := "—"
 	if !dc.StartsAt.IsZero() {
-		startsAt = dc.StartsAt.In(d.loc.Location()).Format("2006-01-02 15:04 MST")
+		startsAt = timeutil.FormatDateTime(dc.StartsAt, d.loc.Location())
 	}
 	endsAt := "—"
 	if !dc.EndsAt.IsZero() {
-		endsAt = dc.EndsAt.In(d.loc.Location()).Format("2006-01-02 15:04 MST")
+		endsAt = timeutil.FormatDateTime(dc.EndsAt, d.loc.Location())
 	}
 
 	benefits := make([]dashCampaignBenefit, 0, len(dc.Benefits))

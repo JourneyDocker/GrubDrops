@@ -30,6 +30,7 @@ type dropsDeps struct {
 	sessions *store.SessionStore
 	registry *platform.Registry
 	sm       *scs.SessionManager // flash messages after whitelist actions
+	s        *store.Settings     // global settings (e.g. MineUnlinkedGlobal)
 }
 
 // lazyFetchBenefits backfills a campaign's benefits the first time its
@@ -538,8 +539,11 @@ func (d *dropsDeps) list(w http.ResponseWriter, r *http.Request) {
 		// A manual "I've linked it" override always promotes to mineable.
 		overrides := d.linkOverrides(r.Context())
 		wl, plat := d.accountWhitelists(r.Context())
+		// Mine-unlinked overrides are resolved once per request (1 global
+		// read + 1 read per enabled account), not once per campaign.
+		mu := d.resolveMineUnlinked(r.Context(), wl)
 		for _, row := range currentRows {
-			mineable, chips := d.linkGrouping(r.Context(), &row, wl, plat)
+			mineable, chips := d.linkGrouping(r.Context(), &row, wl, plat, mu)
 			row.ConnectChips = chips
 			if mineable || overrides[row.CampaignID] {
 				page.Rows = append(page.Rows, row)
@@ -611,7 +615,7 @@ func (d *dropsDeps) collectAll(
 	for _, c := range pastCamps {
 		row := dropsRow{
 			CampaignID:   c.ID,
-			When:         time.Unix(c.EndsAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
+			When:         timeutil.FormatDateTime(time.Unix(c.EndsAt, 0), d.loc.Location()),
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
@@ -642,7 +646,7 @@ func (d *dropsDeps) collectAll(
 	for _, c := range currentCamps {
 		row := dropsRow{
 			CampaignID:   c.ID,
-			When:         time.Unix(c.EndsAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
+			When:         timeutil.FormatDateTime(time.Unix(c.EndsAt, 0), d.loc.Location()),
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
@@ -671,7 +675,7 @@ func (d *dropsDeps) collectAll(
 	for _, c := range upcomingCamps {
 		row := dropsRow{
 			CampaignID:   c.ID,
-			When:         time.Unix(c.StartsAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
+			When:         timeutil.FormatDateTime(time.Unix(c.StartsAt, 0), d.loc.Location()),
 			Platform:     c.Platform,
 			Game:         c.Game,
 			CampaignName: c.Name,
@@ -717,7 +721,7 @@ func (d *dropsDeps) collectAll(
 		}
 		past = append(past, dropsRow{
 			CampaignID:   row.CampaignID,
-			When:         time.Unix(row.ClaimedAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
+			When:         timeutil.FormatDateTime(time.Unix(row.ClaimedAt, 0), d.loc.Location()),
 			Platform:     row.Platform,
 			Game:         row.Game,
 			CampaignName: row.CampaignName,
@@ -1155,14 +1159,62 @@ func addGameKeys(set map[string]bool, name, slug string) {
 	}
 }
 
+// mineUnlinkedFlags is the per-request snapshot of the "mine unlinked"
+// overrides: the global force-on setting plus each enabled account's own
+// opt-in. The watcher OR-s the two at build time (see watcher.Config.MineUnlinked),
+// so a campaign is mineable-unlinked when either applies to an account that
+// whitelists it. Every read is best effort and fails closed (off).
+type mineUnlinkedFlags struct {
+	global bool
+	perAcc map[string]bool
+}
+
+// enabledFor reports whether the given account would mine an unlinked
+// campaign — the global override widens every account, the per-account flag
+// only widens that one.
+func (m mineUnlinkedFlags) enabledFor(accountID string) bool {
+	return m.global || m.perAcc[accountID]
+}
+
+// resolveMineUnlinked snapshots the mine-unlinked overrides for this request.
+// accWhitelists is the per-enabled-account game set (its keys are the
+// enabled account ids), so only accounts that can actually mine something are
+// probed. Any read error degrades to "off", matching the file's style.
+func (d *dropsDeps) resolveMineUnlinked(ctx context.Context, accWhitelists map[string]map[string]bool) mineUnlinkedFlags {
+	var m mineUnlinkedFlags
+	m.perAcc = map[string]bool{}
+	if d.s != nil {
+		v, err := d.s.MineUnlinkedGlobal(ctx)
+		if err != nil {
+			slog.Warn("mine-unlinked global read failed", "err", err)
+		}
+		m.global = v
+	}
+	if m.global {
+		// No need to probe per-account flags: the global already widens
+		// every account.
+		return m
+	}
+	for accID := range accWhitelists {
+		if v, err := d.q.GetSettingString(ctx, MineUnlinkedKey(accID)); err == nil && string(v) == "1" {
+			m.perAcc[accID] = true
+		}
+	}
+	return m
+}
+
 // linkGrouping decides whether a whitelisted campaign is mineable and builds
 // the per-account connect chips. Mineable-if-any: the campaign stays in the
 // main list when at least one account that WHITELISTS its game is linked (or
 // when no whitelisting account's link state is known). It drops to the
 // not-linked section only when every whitelisting account with a known link
-// state is unlinked. Chips are emitted only for whitelisting accounts that
-// have a checked link state.
-func (d *dropsDeps) linkGrouping(ctx context.Context, row *dropsRow, wl map[string]map[string]bool, plat map[string]string) (mineable bool, chips []connectChip) {
+// state is unlinked — and even then, mine-unlinked keeps it mineable, matching
+// the watcher's ForceLinked → MineUnlinked → skip precedence, so the "not
+// mined" section never claims a campaign the watcher will pick up. Chips are
+// emitted only for whitelisting accounts that have a checked link state; they
+// are unchanged by mine-unlinked, so the main pane only ever renders the
+// "→" (unlinked) variant, never a false "connected" tick.
+func (d *dropsDeps) linkGrouping(ctx context.Context, row *dropsRow, wl map[string]map[string]bool, plat map[string]string, mu mineUnlinkedFlags) (mineable bool, chips []connectChip) {
 	if row.CampaignID == "" {
 		return true, nil
 	}
@@ -1175,10 +1227,13 @@ func (d *dropsDeps) linkGrouping(ctx context.Context, row *dropsRow, wl map[stri
 		linkByAcc[l.AccountID] = l
 	}
 	game := strings.ToLower(strings.TrimSpace(row.Game))
-	anyLinked, hasChecked := false, false
+	anyLinked, hasChecked, anyMineUnlinked := false, false, false
 	for accID, set := range wl {
 		if plat[accID] != row.Platform || !set[game] {
 			continue
+		}
+		if mu.enabledFor(accID) {
+			anyMineUnlinked = true
 		}
 		l, ok := linkByAcc[accID]
 		if !ok || l.Checked == 0 {
@@ -1202,8 +1257,10 @@ func (d *dropsDeps) linkGrouping(ctx context.Context, row *dropsRow, wl map[stri
 			break
 		}
 	}
-	// Mineable unless we positively know every whitelisting account is unlinked.
-	mineable = anyLinked || !hasChecked
+	// Mineable unless we positively know every whitelisting account is
+	// unlinked — and mine-unlinked overrides that, since the watcher will
+	// pick the campaign up regardless of link state.
+	mineable = anyLinked || !hasChecked || anyMineUnlinked
 	return mineable, chips
 }
 
@@ -1397,7 +1454,7 @@ func (d *dropsDeps) renderCampaignItems(w http.ResponseWriter, r *http.Request, 
 		CSRFToken:    csrfToken(r),
 	}
 	if camp.EndsAt > 0 {
-		detail.When = time.Unix(camp.EndsAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST")
+		detail.When = timeutil.FormatDateTime(time.Unix(camp.EndsAt, 0), d.loc.Location())
 	}
 	// Per-benefit COLLECTED marks: which accounts already claimed each benefit.
 	collectedByBenefit := map[string][]collectedMark{}

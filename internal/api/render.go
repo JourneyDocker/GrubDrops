@@ -26,6 +26,7 @@ type templateData struct {
 	UpdateAvailable  bool   // a newer GitHub release exists
 	LatestRelease    string // latest release tag, for the nav badge
 	Timezone         string // IANA display zone (e.g. "Asia/Shanghai") for the client clock
+	Hour12           bool   // 12-hour clock for the client clock (default false = 24-hour)
 }
 
 func render(w http.ResponseWriter, r *http.Request, t Renderer, name string, data templateData) {
@@ -36,6 +37,8 @@ func render(w http.ResponseWriter, r *http.Request, t Renderer, name string, dat
 	if displayZone != nil {
 		data.Timezone = displayZone.Name()
 	}
+	// 12/24-hour follows the same nil-safe pattern; unset = 24-hour.
+	data.Hour12 = displayClock != nil && displayClock.Hour12()
 	data.UpdateAvailable, data.LatestRelease = updateInfoFromContext(r.Context())
 	i18n.SetLang(lang)
 	defer i18n.ClearLang()

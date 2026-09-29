@@ -67,7 +67,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 				acc = "@" + acc
 			}
 			page.Claims = append(page.Claims, historyClaim{
-				When:         time.Unix(row.ClaimedAt, 0).In(d.loc.Location()).Format("2006-01-02 15:04 MST"),
+				When:         timeutil.FormatDateTime(time.Unix(row.ClaimedAt, 0), d.loc.Location()),
 				Platform:     row.Platform,
 				Game:         row.Game,
 				Title:        row.BenefitName,
@@ -117,7 +117,7 @@ func (d *historyDeps) get(w http.ResponseWriter, r *http.Request) {
 			acc := fieldStr(l.Fields, "account")
 			label := labelByID[acc]
 			page.Events = append(page.Events, historyEvent{
-				Time:    l.TS.In(d.loc.Location()).Format("15:04:05"),
+				Time:    timeutil.FormatClock(l.TS, d.loc.Location()),
 				Kind:    kind,
 				Color:   colorForKind(kind, l.Level),
 				Message: l.Msg,
@@ -165,7 +165,7 @@ func rewardClaimsFromRing(lines []mlog.LogLine, labelByID, platformByID map[stri
 			platform = "twitch"
 		}
 		out = append(out, historyClaim{
-			When:     l.TS.In(loc).Format("2006-01-02 15:04 MST"),
+			When:     timeutil.FormatDateTime(l.TS, loc),
 			Platform: platform,
 			Game:     game,
 			Title:    title,

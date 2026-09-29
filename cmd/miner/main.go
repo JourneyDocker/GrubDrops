@@ -49,6 +49,12 @@ import (
 // is only a fallback for source/dev builds where no ldflag is set.
 var version string
 
+// updateRepo is the GitHub repo the update checker polls for the latest
+// release. It points at upstream (aalejandrofer/GrubDrops) rather than this
+// fork so a fork without published releases does not 404 the poll. The badge
+// is only a nudge: an upstream release may not be in this fork's image yet.
+const updateRepo = "aalejandrofer/GrubDrops"
+
 func main() {
 	// `grubdrops keygen` prints a fresh, valid GRUB_MASTER_KEY and exits, so a
 	// Docker-only user can generate one without Go or the age tool:
@@ -447,6 +453,12 @@ func run() error {
 		priorityModeVal, priorityModeErr := settingsStore.PriorityMode(ctx)
 		priorityMode := settingOr(logger, priorityModeVal, priorityModeErr, store.PriorityModeOrdered, "priority_mode")
 
+		// Global force-on override for unlinked mining — read here, once per
+		// build, next to the other global settings. OR-ed with the
+		// per-account flag below, so a per-account opt-in is never suppressed.
+		mineUnlinkedGlobalVal, mineUnlinkedGlobalErr := settingsStore.MineUnlinkedGlobal(ctx)
+		mineUnlinkedGlobal := settingOr(logger, mineUnlinkedGlobalVal, mineUnlinkedGlobalErr, false, "mine_unlinked")
+
 		// Runtime cadence + progress-notify granularity — read per build (per
 		// Reload) so saving on /settings + reloading takes effect.
 		tickSecVal, tickSecErr := settingsStore.TickIntervalSec(ctx)
@@ -463,8 +475,9 @@ func run() error {
 
 		// Per-account "mine unlinked" flag — read per build (per Reload)
 		// so toggling + reloading takes effect. See MineUnlinked in
-		// watcher.Config.
-		mineUnlinked := false
+		// watcher.Config. OR-ed with the global override: the global switch
+		// only ever turns this on, never off.
+		mineUnlinked := mineUnlinkedGlobal
 		if v, err := q.GetSettingString(ctx, api.MineUnlinkedKey(a.ID)); err == nil && string(v) == "1" {
 			mineUnlinked = true
 		}
@@ -642,7 +655,7 @@ func run() error {
 		if proxyTransport != nil {
 			updateClient.Transport = proxyTransport
 		}
-		updateChecker := update.NewChecker(updateClient, "JourneyDocker/GrubDrops", settingsStore)
+		updateChecker := update.NewChecker(updateClient, updateRepo, settingsStore)
 		updateInterval := parseDuration(os.Getenv("GRUB_UPDATE_INTERVAL"), 6*time.Hour)
 		go updateChecker.Run(ctx, updateInterval)
 		updateStatus = updateChecker.Status

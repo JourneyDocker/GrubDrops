@@ -39,17 +39,20 @@
   // Clock: render in the configured display timezone (Settings → General;
   // falls back to the TZ env var, then UTC), matching the server-formatted
   // timestamps in the drops/history lists. The zone label is shown alongside.
+  // hour12 comes from the Time Format setting (Settings → General, default
+  // 24-hour) so the header clock matches every server-rendered timestamp.
   (function () {
     var tz = '{{.Timezone}}' || 'UTC';
+    var hour12 = {{if .Hour12}}true{{else}}false{{end}};
     function fmt() {
       try {
         return new Intl.DateTimeFormat([], {
           timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit',
-          hour12: false, timeZoneName: 'short'
+          hour12: hour12, timeZoneName: 'short'
         }).format(new Date());
       } catch (e) {
         // Invalid/unsupported zone name — fall back to UTC so the clock never breaks.
-        return new Date().toLocaleTimeString([], { timeZone: 'UTC', hour12: false }) + ' UTC';
+        return new Date().toLocaleTimeString([], { timeZone: 'UTC', hour12: hour12 }) + ' UTC';
       }
     }
     function tick() {

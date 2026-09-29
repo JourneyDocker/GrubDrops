@@ -14,6 +14,7 @@ import (
 	"github.com/JourneyDocker/grubdrops/internal/i18n"
 	mlog "github.com/JourneyDocker/grubdrops/internal/log"
 	"github.com/JourneyDocker/grubdrops/internal/store/gen"
+	"github.com/JourneyDocker/grubdrops/internal/timeutil"
 )
 
 // eventMsgKeys maps the exact static slog message text emitted by the
@@ -155,7 +156,7 @@ func eventsFromRing(ring *mlog.Ring, kindFilter, accountFilter, lang string, acc
 		}
 		out = append(out, dashEvent{
 			ID:       fmt.Sprintf("ev-%d-%d", l.TS.UnixNano(), i),
-			Time:     l.TS.In(loc).Format("15:04:05"),
+			Time:     timeutil.FormatClock(l.TS, loc),
 			Kind:     kind,
 			Color:    colorForKind(kind, l.Level),
 			BodyHTML: fmt.Sprintf("<em>%s</em> · %s", translateKind(lang, kind), translateMsg(lang, l.Msg)),
