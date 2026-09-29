@@ -1222,6 +1222,7 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	matched := make([]platform.Campaign, 0, len(whitelisted))
 	skippedUnlinked := 0
 	skippedReward := 0
+	minedUnlinked := 0
 	for _, c := range whitelisted {
 		if c.Status != "" && c.Status != "active" {
 			continue
@@ -1248,7 +1249,12 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 			if w.cfg.ForceLinked != nil && w.cfg.ForceLinked(c.ID) {
 				slog.Info("watcher mining link-overridden campaign", "kind", "discovery", "account", w.cfg.AccountID, "campaign", c.Name)
 			} else if w.cfg.MineUnlinked {
-				slog.Info("watcher mining unlinked campaign (mine-unlinked enabled)", "kind", "discovery", "account", w.cfg.AccountID, "campaign", c.Name)
+				// Counted, not logged: this rolled up into the
+				// campaigns_eligible_unlinked attribute on the
+				// "watcher discovery" summary below. One line per
+				// campaign spammed the event list whenever an account
+				// whitelisted several unlinked games.
+				minedUnlinked++
 			} else {
 				skippedUnlinked++
 				continue
@@ -1391,7 +1397,15 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	sort.SliceStable(matched, func(i, j int) bool {
 		return len(matched[i].AllowedChannels) > 0 && len(matched[j].AllowedChannels) == 0
 	})
-	slog.Info("watcher discovery", "kind", "discovery", "account", w.cfg.AccountID, "campaigns_total", len(campaigns), "campaigns_eligible", len(matched), "claimed_count", len(claimed))
+	// The unlinked count is only meaningful when mine-unlinked is on for
+	// this account (global or per-account), so it rides along as an extra
+	// attribute rather than always being present. The dashboard surfaces
+	// it in the event's Details rows, keyed off the field name.
+	discoveryAttrs := []any{"kind", "discovery", "account", w.cfg.AccountID, "campaigns_total", len(campaigns), "campaigns_eligible", len(matched), "claimed_count", len(claimed)}
+	if minedUnlinked > 0 {
+		discoveryAttrs = append(discoveryAttrs, "campaigns_eligible_unlinked", minedUnlinked)
+	}
+	slog.Info("watcher discovery", discoveryAttrs...)
 
 	for _, c := range matched {
 		// Skip campaigns whose channels were all offline earlier this

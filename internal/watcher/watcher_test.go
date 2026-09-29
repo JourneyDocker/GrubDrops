@@ -3,6 +3,7 @@ package watcher
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"sync"
 	"testing"
@@ -1853,5 +1854,135 @@ func TestWatcher_UnlinkedSkippedByDefault_MinedWithMineUnlinked(t *testing.T) {
 			time.Second, 5*time.Millisecond, "watcher never mined the unlinked campaign with MineUnlinked:true")
 		assert.Equal(t, "unlinked", backend.firstPicked(),
 			"MineUnlinked:true must mine the whitelisted unlinked campaign")
+	})
+}
+
+// captureHandler records slog records so a test can assert on structured
+// attributes. The watcher logs through the global default logger, so tests
+// swap it in and restore the previous default afterwards.
+type captureHandler struct {
+	mu  sync.Mutex
+	rec []capturedLog
+}
+
+type capturedLog struct {
+	msg    string
+	fields map[string]any
+}
+
+func (h *captureHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *captureHandler) Handle(_ context.Context, r slog.Record) error {
+	fields := map[string]any{}
+	r.Attrs(func(a slog.Attr) bool { fields[a.Key] = a.Value.Any(); return true })
+	h.mu.Lock()
+	h.rec = append(h.rec, capturedLog{msg: r.Message, fields: fields})
+	h.mu.Unlock()
+	return nil
+}
+
+func (h *captureHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *captureHandler) WithGroup(string) slog.Handler      { return h }
+
+// discovery returns the fields of the most recent "watcher discovery" record.
+func (h *captureHandler) discovery() (map[string]any, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for i := len(h.rec) - 1; i >= 0; i-- {
+		if h.rec[i].msg == "watcher discovery" {
+			return h.rec[i].fields, true
+		}
+	}
+	return nil, false
+}
+
+func (h *captureHandler) countOf(msg string) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	n := 0
+	for _, r := range h.rec {
+		if r.msg == msg {
+			n++
+		}
+	}
+	return n
+}
+
+// captureLogs installs cap as the global slog default for the test's duration.
+func captureLogs(t *testing.T) *captureHandler {
+	t.Helper()
+	cap := &captureHandler{}
+	prev := slog.Default()
+	slog.SetDefault(slog.New(cap))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return cap
+}
+
+// TestWatcher_DiscoveryUnlinkedCount: the per-campaign "mining unlinked
+// campaign" line was folded into a single campaigns_eligible_unlinked
+// attribute on the "watcher discovery" summary, so an account with several
+// unlinked campaigns no longer floods the event list. The attribute must be
+// present only when mine-unlinked is actually on.
+func TestWatcher_DiscoveryUnlinkedCount(t *testing.T) {
+	t.Run("count present when MineUnlinked is on", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		cap := captureLogs(t)
+
+		backend := &unlinkedBackend{MockBackend: platformtest.New()}
+		w := New(Config{
+			AccountID:    "acc_unlinked_count_on",
+			Backend:      backend,
+			Session:      platform.Session{AccessToken: "tok"},
+			Notifier:     &recordingNotifier{},
+			TickInterval: 2 * time.Millisecond,
+			AllowGame:    func(g string) bool { return g == "Rust" },
+			MineUnlinked: true,
+		})
+
+		go func() { _ = w.Run(ctx) }()
+
+		var fields map[string]any
+		require.Eventually(t, func() bool {
+			f, ok := cap.discovery()
+			fields = f
+			return ok && fields["campaigns_eligible_unlinked"] != nil
+		}, time.Second, 5*time.Millisecond,
+			"watcher discovery must carry campaigns_eligible_unlinked when MineUnlinked:true")
+
+		assert.Equal(t, int64(1), fields["campaigns_eligible_unlinked"],
+			"the single unlinked campaign must be counted exactly once")
+		assert.Equal(t, int64(1), fields["campaigns_eligible"],
+			"the unlinked campaign still counts toward campaigns_eligible")
+		assert.Zero(t, cap.countOf("watcher mining unlinked campaign (mine-unlinked enabled)"),
+			"the per-campaign log line must no longer be emitted")
+	})
+
+	t.Run("count absent by default", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		cap := captureLogs(t)
+
+		backend := &unlinkedBackend{MockBackend: platformtest.New()}
+		w := New(Config{
+			AccountID:    "acc_unlinked_count_off",
+			Backend:      backend,
+			Session:      platform.Session{AccessToken: "tok"},
+			Notifier:     &recordingNotifier{},
+			TickInterval: 2 * time.Millisecond,
+			AllowGame:    func(g string) bool { return g == "Rust" },
+		})
+
+		go func() { _ = w.Run(ctx) }()
+
+		require.Eventually(t, func() bool {
+			_, ok := cap.discovery()
+			return ok
+		}, time.Second, 5*time.Millisecond, "watcher must run a discovery cycle")
+
+		fields, _ := cap.discovery()
+		_, present := fields["campaigns_eligible_unlinked"]
+		assert.False(t, present,
+			"campaigns_eligible_unlinked must be omitted entirely when mine-unlinked is off")
 	})
 }

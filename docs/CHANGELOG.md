@@ -26,6 +26,12 @@ All notable changes to GrubDrops.
   whenever unlinked mining is on for it, globally or per-account, so it appears
   in the main table. The "Whitelisted — account not linked" section is left only
   for campaigns that genuinely will not be mined.
+- **Unlinked mining no longer floods the event list.** Mining an unlinked
+  campaign logged one line per campaign, so an account whitelisting several
+  unlinked games repeated the same line every discovery round. Those lines are
+  folded into a single `campaigns_eligible_unlinked` figure on the existing
+  `watcher discovery` entry, shown in that event's details and present only while
+  mine-unlinked is on.
 
 ### Fixed
 
