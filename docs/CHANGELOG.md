@@ -35,6 +35,10 @@ All notable changes to GrubDrops.
 
 ### Fixed
 
+- **Updated stale Twitch GraphQL operation hashes.** Inventory, Campaigns
+  (`ViewerDropsDashboard`), and GameDirectory (`DirectoryPage_Game`) still used
+  hashes from before Twitch's July/Sep 2026 rotations. Hashes re-verified against
+  TwitchDropsMiner master `constants.py`.
 - **The update check no longer fails.** It polled this fork's releases, which
   are not published, so every check errored. It now polls upstream
   (`aalejandrofer/GrubDrops`) and the badge tooltip notes that an upstream

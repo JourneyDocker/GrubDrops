@@ -2,6 +2,8 @@ package twitch
 
 // Captured 2026-06-04 from DevilXD/TwitchDropsMiner@c5e6286c41dab46e1189333eede734e3b1995dc4. See
 // docs/superpowers/notes/2026-06-04-twitch-ops-source.md for source links.
+// Inventory/Campaigns/GameDirectory hashes verified 2026-10-02 against
+// DevilXD/TwitchDropsMiner master constants.py.
 // Refresh these constants if production sees PersistedQueryNotFound errors.
 const (
 	// Twitch Android app client. Has weaker integrity gating than the
@@ -45,14 +47,14 @@ var (
 	// DevilXD key: "Inventory".
 	OpInventory = Operation{
 		Name: "Inventory",
-		Hash: "d86775d0ef16a63a33ad52e80eaff963b2d5b72fada7c991504a57496e1d8e4b",
+		Hash: "8337eb8541b314040b0edde0c09c5c7a2783ba1960aa9edfbf3bac16d0fec404",
 	}
 
 	// OpCampaigns lists all available drop campaigns.
 	// DevilXD key: "Campaigns". Equivalent to plan-spec "DropsPage_ContentList".
 	OpCampaigns = Operation{
 		Name: "ViewerDropsDashboard",
-		Hash: "5a4da2ab3d5b47c9f9ce864e727b2cb346af1e3ea8b897fe8f704a97ff017619",
+		Hash: "c16bb890cc8ce7647a96ee69cd313d423a378a3dedadf630a1017cde18975feb",
 	}
 
 	// OpDropCampaignDetails returns extended information about a particular campaign.
@@ -89,7 +91,7 @@ var (
 	// DevilXD key: "GameDirectory".
 	OpGameDirectory = Operation{
 		Name: "DirectoryPage_Game",
-		Hash: "cb5dc816e139dcb8a118f14b4b677d59abc224a4b016c4bc2bb00a47fe0ddec4",
+		Hash: "86bcceb4e8b1a51256ff8eed8bd8aae4acacf80d737efe904f84f3aeadf8cafd",
 	}
 
 	// OpSlugRedirect turns a game's display name into its directory
