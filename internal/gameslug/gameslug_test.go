@@ -15,6 +15,10 @@ func TestSlug(t *testing.T) {
 		"under_score_name":     "under-score-name",
 		"--leading-trailing--": "leading-trailing",
 		"!!!":                  "",
+		// Regression: punctuation folds to a dash, not dropped — the dropped
+		// form resolves to no game on Twitch.
+		"Warhammer 40,000: Space Marine II": "warhammer-40-000-space-marine-ii",
+		"PUBG: BATTLEGROUNDS":               "pubg-battlegrounds",
 	}
 	for in, want := range cases {
 		if got := Slug(in); got != want {

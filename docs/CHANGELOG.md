@@ -39,6 +39,11 @@ All notable changes to GrubDrops.
   (`ViewerDropsDashboard`), and GameDirectory (`DirectoryPage_Game`) still used
   hashes from before Twitch's July/Sep 2026 rotations. Hashes re-verified against
   TwitchDropsMiner master `constants.py`.
+- **Game slugs with punctuation now resolve to the correct Twitch directory.**
+  Commas/colons were dropped instead of dashed, so e.g. Warhammer 40,000:
+  Space Marine II queried a slug Twitch does not resolve and the directory
+  came back empty ("no eligible streams live"). Slugs now fold punctuation
+  runs to a dash.
 - **The update check no longer fails.** It polled this fork's releases, which
   are not published, so every check errored. It now polls upstream
   (`aalejandrofer/GrubDrops`) and the badge tooltip notes that an upstream

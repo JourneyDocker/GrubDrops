@@ -13,29 +13,38 @@ import "strings"
 //	"Counter-Strike 2"  -> "counter-strike-2"
 //	"Tom's Game!!"      -> "toms-game"
 //
-// Lowercases; runs of space / '-' / '_' collapse to a single dash; every
-// other character (apostrophes, periods, colons, ...) is dropped; leading
-// and trailing dashes are trimmed.
+// Lowercases, drops apostrophes entirely, then collapses every run of
+// non [a-z0-9] characters (spaces, dashes, underscores, commas, colons,
+// periods, ...) to a single dash, trimming leading/trailing dashes.
+// Punctuation such as commas and colons becomes a dash ("Warhammer 40,000:
+// Space Marine II" -> "warhammer-40-000-space-marine-ii"); the previous
+// implementation dropped them ("warhammer-40000-..."), a slug Twitch does
+// not resolve, so the directory returned no game and no channels.
+//
+// NOTE: this intentionally deviates from DevilXD/TwitchDropsMiner's
+// Game.slug derivation (Python `\W+` -> `-`), which preserves underscores
+// (`under_score_name` stays as-is upstream). Here underscores fold to
+// dashes (`under_score_name` -> `under-score-name`) to match this repo's
+// long-standing canonical-slug / game-id convention.
 func Slug(name string) string {
-	out := make([]byte, 0, len(name))
-	for i := 0; i < len(name); i++ {
-		c := name[i]
-		switch {
-		case c >= 'A' && c <= 'Z':
-			out = append(out, c+32)
-		case (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'):
-			out = append(out, c)
-		case c == ' ' || c == '-' || c == '_':
-			if len(out) > 0 && out[len(out)-1] != '-' {
-				out = append(out, '-')
-			}
+	lower := strings.ToLower(name)
+	// Apostrophes are removed, not dashed ("Tom's" -> "toms").
+	lower = strings.ReplaceAll(lower, "'", "")
+	var b strings.Builder
+	b.Grow(len(lower))
+	prevDash := true // suppress leading dashes
+	for _, r := range lower {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			prevDash = false
+			continue
 		}
-		// everything else is dropped
+		if !prevDash {
+			b.WriteByte('-')
+			prevDash = true
+		}
 	}
-	for len(out) > 0 && out[len(out)-1] == '-' {
-		out = out[:len(out)-1]
-	}
-	return string(out)
+	return strings.Trim(b.String(), "-")
 }
 
 // ID returns the internal game id: "g_" + the slug with dashes as
