@@ -49,6 +49,15 @@ All notable changes to GrubDrops.
   Space Marine II queried a slug Twitch does not resolve and the directory
   came back empty ("no eligible streams live"). Slugs now fold punctuation
   runs to a dash.
+- **Game directory slugs now come from Twitch, not guesswork.** A game renamed
+  by Twitch sometimes keeps its old live slug, so deriving `/directory/category/`
+  from the display name silently found nothing and discovery reported "no
+  eligible streams live" (CONTROL Resonant / Overwatch). The miner now asks
+  Twitch for the canonical slug and caches it in memory, so a rename is picked
+  up with no code change. If Twitch errors or answers with an empty slug the
+  miner falls back to the locally derived slug, which is exactly what it did
+  before: games whose display name already matches their slug keep working,
+  but a renamed game stays undiscovered until Twitch answers again.
 - **The update check no longer fails.** It polled this fork's releases, which
   are not published, so every check errored. It now polls upstream
   (`aalejandrofer/GrubDrops`) and the badge tooltip notes that an upstream

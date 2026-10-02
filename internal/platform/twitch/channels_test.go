@@ -55,3 +55,21 @@ func TestChannels_ListEligible_EmptyAllowList(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, out)
 }
+
+func TestDirectorySlug(t *testing.T) {
+	// Pure local derivation — the offline fallback used only when Twitch
+	// errors or returns an empty slug. It deliberately cannot know about
+	// renames: a renamed game derives to the old slug (CONTROL Resonant ->
+	// control-resonant), while the canonical one comes from
+	// directorySlugResolved. See slugredirect_test.go.
+	cases := map[string]string{
+		// Unaffected games pass through the standard derivation.
+		"Warhammer 40,000: Space Marine II": "warhammer-40-000-space-marine-ii",
+		"CONTROL Resonant":                  "control-resonant",
+		"Apex Legends":                      "apex-legends",
+		"":                                  "",
+	}
+	for in, want := range cases {
+		assert.Equal(t, want, directorySlug(in), "directorySlug(%q)", in)
+	}
+}

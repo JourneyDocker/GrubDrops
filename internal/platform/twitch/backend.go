@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/JourneyDocker/grubdrops/internal/gameslug"
 	"github.com/JourneyDocker/grubdrops/internal/netutil"
 	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
@@ -412,7 +411,7 @@ func (b *Backend) ListEligibleChannels(ctx context.Context, s platform.Session, 
 	// of the game. Fall back to the DirectoryPage_Game query — without
 	// this most public campaigns (Minecraft, Apex, etc) have nothing
 	// to watch and the watcher sleeps forever.
-	slug := gameslug.Slug(c.Game)
+	slug := b.chans.directorySlugResolved(ctx, s, c.Game)
 	return b.chans.listForGameDirectory(ctx, s, slug)
 }
 

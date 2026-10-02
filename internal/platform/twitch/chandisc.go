@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JourneyDocker/grubdrops/internal/gameslug"
 	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
@@ -135,7 +134,7 @@ func (d *discovery) listByChannels(ctx context.Context, sess platform.Session, c
 	// double the DirectoryPage_Game + AvailableDrops fan-out every tick.
 	seenSlugs := make(map[string]struct{}, len(sess.Games))
 	for _, game := range sess.Games {
-		slug := gameslug.Slug(game)
+		slug := ch.directorySlugResolved(ctx, sess, game)
 		if slug == "" {
 			continue
 		}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/JourneyDocker/grubdrops/internal/gameslug"
 	"github.com/JourneyDocker/grubdrops/internal/platform"
 )
 
@@ -18,6 +19,74 @@ func sameGame(a, b string) bool {
 	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }
 
+// slugRedirectData decodes the DirectoryGameRedirect response —
+// Twitch's canonical name→slug resolution (the path segment in
+// /directory/category/<slug>).
+type slugRedirectData struct {
+	Game *struct {
+		Slug string `json:"slug"`
+	} `json:"game"`
+}
+
+// resolveGameSlug asks Twitch for the canonical directory slug for a
+// game display name via OpSlugRedirect (DirectoryGameRedirect).
+// Results are cached per channels instance keyed on the lowercased
+// trimmed game name; only successful non-empty slugs are cached.
+// An empty slug or any request failure is an error, and callers fall
+// back to the local derivation — which is only right for games whose
+// display name already matches their slug. A renamed game still ends up
+// on its dead slug until Twitch answers, i.e. no worse than before.
+func (ch *channels) resolveGameSlug(ctx context.Context, sess platform.Session, gameName string) (string, error) {
+	key := strings.ToLower(strings.TrimSpace(gameName))
+	ch.slugMu.Lock()
+	if ch.slugCache != nil {
+		if slug, ok := ch.slugCache[key]; ok {
+			ch.slugMu.Unlock()
+			return slug, nil
+		}
+	}
+	ch.slugMu.Unlock()
+
+	var resp slugRedirectData
+	if err := ch.c.gql(ctx, sess.AccessToken, OpSlugRedirect, map[string]any{"name": gameName}, &resp); err != nil {
+		return "", fmt.Errorf("slug redirect %q: %w", gameName, err)
+	}
+	if resp.Game == nil || strings.TrimSpace(resp.Game.Slug) == "" {
+		return "", fmt.Errorf("slug redirect %q: empty slug", gameName)
+	}
+	slug := resp.Game.Slug
+
+	ch.slugMu.Lock()
+	if ch.slugCache == nil {
+		ch.slugCache = map[string]string{}
+	}
+	ch.slugCache[key] = slug
+	ch.slugMu.Unlock()
+	return slug, nil
+}
+
+// directorySlug resolves a campaign/whitelist game display name to the
+// Twitch directory slug, using only the standard local derivation.
+// It is the offline fallback; prefer directorySlugResolved.
+func directorySlug(gameName string) string {
+	return gameslug.Slug(gameName)
+}
+
+// directorySlugResolved resolves a game display name to its canonical
+// Twitch directory slug via OpSlugRedirect, falling back to the local
+// gameslug.Slug derivation when Twitch errors or returns an empty slug.
+// The fallback only rescues games whose display name already matches
+// their slug; for a renamed game it reproduces the pre-change dead slug.
+func (ch *channels) directorySlugResolved(ctx context.Context, sess platform.Session, gameName string) string {
+	if slug, err := ch.resolveGameSlug(ctx, sess, gameName); err == nil {
+		return slug
+	} else {
+		slog.Debug("twitch directory slug redirect failed; using derived slug",
+			"game", gameName, "fallback", gameslug.Slug(gameName), "err", err)
+		return gameslug.Slug(gameName)
+	}
+}
+
 // liveCheckConcurrency caps the in-flight OpGetStreamInfo requests
 // listEligible issues in parallel. Twitch's gql edge tolerates ~20
 // concurrent requests per session — DevilXD's bulk_check_online uses
@@ -26,6 +95,19 @@ const liveCheckConcurrency = 20
 
 type channels struct {
 	c *client
+
+	// slugCache memoizes canonical directory slugs resolved via
+	// OpSlugRedirect, keyed on the lowercased trimmed game name.
+	// Only successful non-empty slugs are stored. Lazily
+	// initialized inside resolveGameSlug so zero-value channels
+	// literals (&channels{c: c}) in tests stay valid.
+	// Deliberately in-memory with no TTL/persistence: cardinality is
+	// bounded by the whitelist, restart cost is one
+	// redirect call per game, and a persisted/TTL slug would serve
+	// stale categories across a Twitch rename instead of self-healing
+	// on restart.
+	slugMu    sync.Mutex
+	slugCache map[string]string
 }
 
 // streamLiveData decodes the VideoPlayerStreamInfoOverlayChannel
