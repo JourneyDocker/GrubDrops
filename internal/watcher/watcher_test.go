@@ -1986,3 +1986,226 @@ func TestWatcher_DiscoveryUnlinkedCount(t *testing.T) {
 			"campaigns_eligible_unlinked must be omitted entirely when mine-unlinked is off")
 	})
 }
+
+// preemptBackend is a mutable-campaigns backend for priority-preemption
+// tests. The campaign set can be swapped mid-watch; inventory always reports
+// every known benefit as in-progress with ADVANCING minutes, so the watch
+// looks healthy (no vanish, no freeze) and never completes (RequiredMinutes
+// is large) — the only reason to leave StateWatching is a preemption.
+type preemptBackend struct {
+	*platformtest.MockBackend
+	mu        sync.Mutex
+	campaigns []platform.Campaign
+	minutes   map[string]int
+	picks     []string // campaign IDs passed to ListEligibleChannels, in order
+	stops     int
+}
+
+func (p *preemptBackend) setCampaigns(camps []platform.Campaign) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.campaigns = append([]platform.Campaign(nil), camps...)
+}
+
+func (p *preemptBackend) ListActiveCampaigns(_ context.Context, _ platform.Session) ([]platform.Campaign, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]platform.Campaign(nil), p.campaigns...), nil
+}
+
+func (p *preemptBackend) ListEligibleChannels(_ context.Context, _ platform.Session, c platform.Campaign) ([]platform.Stream, error) {
+	p.mu.Lock()
+	p.picks = append(p.picks, c.ID)
+	p.mu.Unlock()
+	return []platform.Stream{{Channel: "streamer"}}, nil
+}
+
+func (p *preemptBackend) InventoryProgress(_ context.Context, _ platform.Session) ([]platform.Progress, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]platform.Progress, 0, len(p.campaigns))
+	for _, c := range p.campaigns {
+		for _, b := range c.Benefits {
+			p.minutes[b.ID]++
+			out = append(out, platform.Progress{BenefitID: b.ID, MinutesWatched: p.minutes[b.ID]})
+		}
+	}
+	return out, nil
+}
+
+func (p *preemptBackend) StopWatch(_ context.Context, _ platform.WatchHandle) error {
+	p.mu.Lock()
+	p.stops++
+	p.mu.Unlock()
+	return nil
+}
+
+func (p *preemptBackend) hasPicked(id string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for _, got := range p.picks {
+		if got == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *preemptBackend) pickCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return len(p.picks)
+}
+
+func (p *preemptBackend) stopCount() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.stops
+}
+
+func preemptCampaign(id, game string, endsAt time.Time, avbl int) platform.Campaign {
+	return platform.Campaign{
+		ID: id, Game: game, Name: game + " campaign",
+		Status: "active", AccountLinked: true,
+		EndsAt: endsAt, AllowedChannelCount: avbl,
+		Benefits: []platform.DropBenefit{{ID: "drop_" + id, CampaignID: id, Name: "drop", RequiredMinutes: 1000}},
+	}
+}
+
+func newPreemptWatcher(backend *preemptBackend, accountID string, extra Config) *Watcher {
+	cfg := Config{
+		AccountID:         accountID,
+		Backend:           backend,
+		Session:           platform.Session{AccessToken: "tok"},
+		Notifier:          &recordingNotifier{},
+		TickInterval:      2 * time.Millisecond,
+		HeartbeatInterval: 6 * time.Millisecond, // inventory+preemption every 3rd tick
+		AllowGame:         func(g string) bool { return true },
+	}
+	if extra.PriorityMode != "" {
+		cfg.PriorityMode = extra.PriorityMode
+	}
+	if extra.GameRank != nil {
+		cfg.GameRank = extra.GameRank
+	}
+	if extra.AllowGame != nil {
+		cfg.AllowGame = extra.AllowGame
+	}
+	return New(cfg)
+}
+
+// TestWatcher_PreemptOrdered_ToHigherRank: while watching a low-rank game,
+// a higher-rank (lower GameRank) campaign appears → the watcher must stop
+// the old watch and pick the new campaign.
+func TestWatcher_PreemptOrdered_ToHigherRank(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	backend := &preemptBackend{MockBackend: platformtest.New(), minutes: map[string]int{}}
+	backend.setCampaigns([]platform.Campaign{preemptCampaign("low", "LowGame", time.Time{}, 0)})
+	rank := map[string]int{"HighGame": 0, "LowGame": 1}
+	w := newPreemptWatcher(backend, "acc_preempt_ordered", Config{
+		GameRank: func(g string) int {
+			if r, ok := rank[g]; ok {
+				return r
+			}
+			return 1 << 30
+		},
+	})
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool { return w.State() == StateWatching },
+		2*time.Second, 5*time.Millisecond, "watcher never started watching")
+	require.True(t, backend.hasPicked("low"), "watcher should start on the low-rank campaign")
+
+	backend.setCampaigns([]platform.Campaign{
+		preemptCampaign("low", "LowGame", time.Time{}, 0),
+		preemptCampaign("high", "HighGame", time.Time{}, 0),
+	})
+	require.Eventually(t, func() bool { return backend.hasPicked("high") },
+		3*time.Second, 5*time.Millisecond, "watcher never preempted to the higher-rank campaign")
+	assert.GreaterOrEqual(t, backend.stopCount(), 1, "preemption must StopWatch the old watch")
+}
+
+// TestWatcher_PreemptEndingSoonest_ToEarlierEnd: while watching a campaign
+// ending later, one ending sooner appears → preempt to the earlier EndsAt.
+func TestWatcher_PreemptEndingSoonest_ToEarlierEnd(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	now := time.Now()
+	backend := &preemptBackend{MockBackend: platformtest.New(), minutes: map[string]int{}}
+	backend.setCampaigns([]platform.Campaign{preemptCampaign("later", "Rust", now.Add(2*time.Hour), 0)})
+	w := newPreemptWatcher(backend, "acc_preempt_ends", Config{PriorityMode: "ending_soonest"})
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool { return w.State() == StateWatching },
+		2*time.Second, 5*time.Millisecond, "watcher never started watching")
+	require.True(t, backend.hasPicked("later"), "watcher should start on the later-ending campaign")
+
+	backend.setCampaigns([]platform.Campaign{
+		preemptCampaign("later", "Rust", now.Add(2*time.Hour), 0),
+		preemptCampaign("sooner", "Rust", now.Add(30*time.Minute), 0),
+	})
+	require.Eventually(t, func() bool { return backend.hasPicked("sooner") },
+		3*time.Second, 5*time.Millisecond, "watcher never preempted to the sooner-ending campaign")
+	assert.GreaterOrEqual(t, backend.stopCount(), 1, "preemption must StopWatch the old watch")
+}
+
+// TestWatcher_PreemptLowAvbl_ToScarcer: while watching a wide campaign, a
+// scarcer (smaller AllowedChannelCount) one appears → preempt to it.
+func TestWatcher_PreemptLowAvbl_ToScarcer(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	backend := &preemptBackend{MockBackend: platformtest.New(), minutes: map[string]int{}}
+	backend.setCampaigns([]platform.Campaign{preemptCampaign("wide", "Rust", time.Time{}, 50)})
+	w := newPreemptWatcher(backend, "acc_preempt_avbl", Config{PriorityMode: "low_avbl_first"})
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool { return w.State() == StateWatching },
+		2*time.Second, 5*time.Millisecond, "watcher never started watching")
+	require.True(t, backend.hasPicked("wide"), "watcher should start on the wide campaign")
+
+	backend.setCampaigns([]platform.Campaign{
+		preemptCampaign("wide", "Rust", time.Time{}, 50),
+		preemptCampaign("narrow", "Rust", time.Time{}, 3),
+	})
+	require.Eventually(t, func() bool { return backend.hasPicked("narrow") },
+		3*time.Second, 5*time.Millisecond, "watcher never preempted to the scarcer campaign")
+	assert.GreaterOrEqual(t, backend.stopCount(), 1, "preemption must StopWatch the old watch")
+}
+
+// TestWatcher_NoPreempt_WhenCurrentStillTop: a LOWER-priority campaign
+// appears while watching the top one → the watcher must keep the current
+// watch (no StopWatch, no re-pick).
+func TestWatcher_NoPreempt_WhenCurrentStillTop(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	rank := map[string]int{"TopGame": 0, "LowGame": 1}
+	backend := &preemptBackend{MockBackend: platformtest.New(), minutes: map[string]int{}}
+	backend.setCampaigns([]platform.Campaign{preemptCampaign("top", "TopGame", time.Time{}, 0)})
+	w := newPreemptWatcher(backend, "acc_preempt_stable", Config{
+		GameRank: func(g string) int {
+			if r, ok := rank[g]; ok {
+				return r
+			}
+			return 1 << 30
+		},
+	})
+	go func() { _ = w.Run(ctx) }()
+
+	require.Eventually(t, func() bool { return w.State() == StateWatching },
+		2*time.Second, 5*time.Millisecond, "watcher never started watching")
+	require.True(t, backend.hasPicked("top"), "watcher should start on the top-rank campaign")
+
+	backend.setCampaigns([]platform.Campaign{
+		preemptCampaign("top", "TopGame", time.Time{}, 0),
+		preemptCampaign("low", "LowGame", time.Time{}, 0),
+	})
+	assert.Never(t, func() bool { return backend.pickCount() > 1 || backend.stopCount() > 0 },
+		400*time.Millisecond, 5*time.Millisecond,
+		"watcher must not preempt while the current campaign is still top priority")
+	assert.Equal(t, StateWatching, w.State(), "watcher must still be watching the top campaign")
+}

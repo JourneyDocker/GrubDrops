@@ -21,6 +21,11 @@ All notable changes to GrubDrops.
 
 ### Changed
 
+- **All priority modes now preempt instead of just selecting.** While watching,
+  the watcher periodically re-ranks all eligible campaigns; when another
+  campaign now outranks the current one it stops the watch and switches via
+  PickCampaign. `ordered` preempts on whitelist rank, `ending_soonest` on
+  earlier EndsAt, `low_avbl_first` on fewer available channels.
 - **The Drops page no longer lists campaigns as "not mined" when they are.**
   A whitelisted campaign with no linked account is now counted as mineable
   whenever unlinked mining is on for it, globally or per-account, so it appears

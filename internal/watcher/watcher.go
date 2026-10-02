@@ -96,7 +96,12 @@ type Config struct {
 	// PriorityMode picks the ordering policy when multiple
 	// whitelisted campaigns are eligible. "ordered" sorts by
 	// GameRank (whitelist top-down); "ending_soonest" sorts by the
-	// campaign's EndsAt ascending. Empty defaults to "ordered".
+	// campaign's EndsAt ascending; "low_avbl_first" sorts by
+	// AllowedChannelCount ascending (scarcer first). Empty defaults
+	// to "ordered". The same ordering also drives priority
+	// PREEMPTION: while watching, the watcher periodically re-ranks
+	// all eligible campaigns and yields the current watch (back to
+	// PickCampaign) when another campaign now outranks it.
 	PriorityMode string
 
 	// Persister, when set, receives every campaign the backend discovered
@@ -484,6 +489,189 @@ func firstUnmetPrecondition(preconditions []string, claimed map[string]bool) str
 		}
 	}
 	return ""
+}
+
+// sortMatchedCampaigns orders eligible campaigns per the priority mode,
+// then applies the restricted-first stable partition. Shared by
+// pickCampaign (initial pick) and the watch-time preemption check so both
+// rank candidates identically: "ending_soonest" by EndsAt ascending
+// (zero/missing sorts last, ties by fewest remaining minutes),
+// "low_avbl_first" by AllowedChannelCount ascending (0 = unrestricted
+// sorts last, ties by fewest remaining minutes), otherwise ("ordered" /
+// default) by GameRank ascending (ties by fewest remaining minutes).
+func sortMatchedCampaigns(matched []platform.Campaign, progressByID map[string]int, priorityMode string, gameRank func(string) int) {
+	if priorityMode == "ending_soonest" {
+		sort.SliceStable(matched, func(i, j int) bool {
+			// Treat 0/missing EndsAt as MaxInt so they sort last —
+			// don't pick a campaign whose end we don't know first.
+			ai := matched[i].EndsAt
+			aj := matched[j].EndsAt
+			if ai.IsZero() && aj.IsZero() {
+				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
+			}
+			if ai.IsZero() {
+				return false
+			}
+			if aj.IsZero() {
+				return true
+			}
+			if ai.Equal(aj) {
+				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
+			}
+			return ai.Before(aj)
+		})
+	} else if priorityMode == "low_avbl_first" {
+		// DevilXD LOW_AVBL_FIRST: prefer campaigns whose allow-list is
+		// smaller (scarcer broadcasters). 0 means "any channel for the
+		// game" — treat as effectively infinite so unrestricted
+		// campaigns sort last. Ties fall back to fewest-remaining-min
+		// (P5) so we finish the closest-to-claim benefit first.
+		sort.SliceStable(matched, func(i, j int) bool {
+			ai := matched[i].AllowedChannelCount
+			aj := matched[j].AllowedChannelCount
+			if ai == 0 {
+				ai = 1 << 30
+			}
+			if aj == 0 {
+				aj = 1 << 30
+			}
+			if ai == aj {
+				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
+			}
+			return ai < aj
+		})
+	} else if gameRank != nil {
+		sort.SliceStable(matched, func(i, j int) bool {
+			ri := gameRank(matched[i].Game)
+			rj := gameRank(matched[j].Game)
+			if ri == rj {
+				// P5 tiebreak: same whitelist rank → prefer the
+				// campaign with the fewest minutes remaining to claim
+				// (already in progress > unstarted).
+				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
+			}
+			return ri < rj
+		})
+	}
+	// Channel-RESTRICTED (team / ACL-limited) campaigns first, OPEN ones
+	// (empty AllowedChannels) last. Stable partition: preserves the priority
+	// order within each group. Applies to both platforms:
+	//   Kick — open campaigns accrue passively on any participating live
+	//     channel in the category, so they complete themselves while a team
+	//     channel is watched; the slot is only worth spending on restricted ones.
+	//   Twitch — restricted campaigns are limited to specific broadcasters who
+	//     are live only in narrow windows, so finish them while they're live;
+	//     open campaigns can be mined from any channel for the game anytime.
+	sort.SliceStable(matched, func(i, j int) bool {
+		return len(matched[i].AllowedChannels) > 0 && len(matched[j].AllowedChannels) == 0
+	})
+}
+
+// hasMineableBenefit reports whether campaign c holds at least one benefit
+// pickCampaign could mine: a watch-time drop that is unclaimed (both by
+// inventory state and by our own claims table), not ghost-skipped, and whose
+// precondition chain is satisfied. Mirrors the per-benefit gates in
+// pickCampaign's pick loop so preemption ranks exactly the campaigns the
+// picker could choose.
+func (w *Watcher) hasMineableBenefit(c platform.Campaign, claimed, ownClaimed map[string]bool) bool {
+	for _, b := range c.Benefits {
+		if b.RequiredMinutes <= 0 {
+			continue
+		}
+		if claimed[b.ID] || ownClaimed[b.ID] {
+			continue
+		}
+		w.mu.Lock()
+		_, skip := w.skippedBenefits[b.ID]
+		w.mu.Unlock()
+		if skip {
+			continue
+		}
+		if unmet := firstUnmetPrecondition(b.Preconditions, claimed); unmet != "" {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// topPreemptCandidate re-discovers active campaigns and returns the
+// highest-priority ELIGIBLE candidate under the current PriorityMode — the
+// same whitelist + link + benefit-mineability gates pickCampaign applies,
+// ranked with sortMatchedCampaigns. Campaigns on the no-stream cooldown
+// are excluded (their channels were all offline this round). Returns
+// (nil, nil) when nothing eligible exists. A discovery failure returns an
+// error so the caller can keep the current watch; never preempt on error.
+// The caller's freshly-polled inventory progress is reused for the
+// remaining-minutes tiebreak so this costs one discovery call, not two.
+func (w *Watcher) topPreemptCandidate(ctx context.Context, progress []platform.Progress) (*platform.Campaign, error) {
+	campaigns, err := w.cfg.Backend.ListActiveCampaigns(ctx, w.cfg.Session)
+	if err != nil {
+		return nil, err
+	}
+	if len(campaigns) == 0 {
+		return nil, nil
+	}
+	claimed := map[string]bool{}
+	progressByID := make(map[string]int, len(progress))
+	for _, p := range progress {
+		progressByID[p.BenefitID] = p.MinutesWatched
+		if p.Claimed {
+			claimed[p.BenefitID] = true
+		}
+	}
+	ownClaimed := map[string]bool{}
+	if cr, ok := w.cfg.ClaimRecorder.(interface {
+		ClaimedBenefitIDs(context.Context, string) (map[string]bool, error)
+	}); ok {
+		if ids, err := cr.ClaimedBenefitIDs(ctx, w.cfg.AccountID); err == nil {
+			ownClaimed = ids
+		}
+	}
+	var matched []platform.Campaign
+	for _, c := range campaigns {
+		if w.cfg.AllowGame != nil || w.cfg.AllowChannel != nil {
+			gameOK := w.cfg.AllowGame != nil && w.cfg.AllowGame(c.Game)
+			chanOK := w.cfg.AllowChannel != nil && w.cfg.AllowChannel(c.AllowedChannels)
+			if !gameOK && !chanOK {
+				continue
+			}
+		}
+		if c.Status != "" && c.Status != "active" {
+			continue
+		}
+		if c.Kind == "reward" {
+			continue
+		}
+		if (c.Platform == "twitch" || c.AccountLinkChecked) && !c.AccountLinked {
+			if w.cfg.ForceLinked != nil && w.cfg.ForceLinked(c.ID) {
+				// Manual override — mineable.
+			} else if w.cfg.MineUnlinked {
+				// Allowed by config — mineable.
+			} else {
+				continue
+			}
+		}
+		if w.cfg.ExcludeGame != nil && w.cfg.ExcludeGame(c.Game) {
+			continue
+		}
+		w.mu.Lock()
+		_, noStream := w.noStreamCampaigns[c.ID]
+		w.mu.Unlock()
+		if noStream {
+			continue
+		}
+		if !w.hasMineableBenefit(c, claimed, ownClaimed) {
+			continue
+		}
+		matched = append(matched, c)
+	}
+	if len(matched) == 0 {
+		return nil, nil
+	}
+	sortMatchedCampaigns(matched, progressByID, w.cfg.PriorityMode, w.cfg.GameRank)
+	top := matched[0]
+	return &top, nil
 }
 
 // unsubscribeCurrentChannel drops the active video-playback PubSub
@@ -1332,71 +1520,7 @@ func (w *Watcher) pickCampaign(ctx context.Context) error {
 	for _, p := range progress {
 		progressByID[p.BenefitID] = p.MinutesWatched
 	}
-	if w.cfg.PriorityMode == "ending_soonest" {
-		sort.SliceStable(matched, func(i, j int) bool {
-			// Treat 0/missing EndsAt as MaxInt so they sort last —
-			// don't pick a campaign whose end we don't know first.
-			ai := matched[i].EndsAt
-			aj := matched[j].EndsAt
-			if ai.IsZero() && aj.IsZero() {
-				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
-			}
-			if ai.IsZero() {
-				return false
-			}
-			if aj.IsZero() {
-				return true
-			}
-			if ai.Equal(aj) {
-				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
-			}
-			return ai.Before(aj)
-		})
-	} else if w.cfg.PriorityMode == "low_avbl_first" {
-		// DevilXD LOW_AVBL_FIRST: prefer campaigns whose allow-list is
-		// smaller (scarcer broadcasters). 0 means "any channel for the
-		// game" — treat as effectively infinite so unrestricted
-		// campaigns sort last. Ties fall back to fewest-remaining-min
-		// (P5) so we finish the closest-to-claim benefit first.
-		sort.SliceStable(matched, func(i, j int) bool {
-			ai := matched[i].AllowedChannelCount
-			aj := matched[j].AllowedChannelCount
-			if ai == 0 {
-				ai = 1 << 30
-			}
-			if aj == 0 {
-				aj = 1 << 30
-			}
-			if ai == aj {
-				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
-			}
-			return ai < aj
-		})
-	} else if w.cfg.GameRank != nil {
-		sort.SliceStable(matched, func(i, j int) bool {
-			ri := w.cfg.GameRank(matched[i].Game)
-			rj := w.cfg.GameRank(matched[j].Game)
-			if ri == rj {
-				// P5 tiebreak: same whitelist rank → prefer the
-				// campaign with the fewest minutes remaining to claim
-				// (already in progress > unstarted).
-				return campaignMinRemaining(matched[i], progressByID) < campaignMinRemaining(matched[j], progressByID)
-			}
-			return ri < rj
-		})
-	}
-	// Channel-RESTRICTED (team / ACL-limited) campaigns first, OPEN ones
-	// (empty AllowedChannels) last. Stable partition: preserves the priority
-	// order within each group. Applies to both platforms:
-	//   Kick — open campaigns accrue passively on any participating live
-	//     channel in the category, so they complete themselves while a team
-	//     channel is watched; the slot is only worth spending on restricted ones.
-	//   Twitch — restricted campaigns are limited to specific broadcasters who
-	//     are live only in narrow windows, so finish them while they're live;
-	//     open campaigns can be mined from any channel for the game anytime.
-	sort.SliceStable(matched, func(i, j int) bool {
-		return len(matched[i].AllowedChannels) > 0 && len(matched[j].AllowedChannels) == 0
-	})
+	sortMatchedCampaigns(matched, progressByID, w.cfg.PriorityMode, w.cfg.GameRank)
 	// The unlinked count is only meaningful when mine-unlinked is on for
 	// this account (global or per-account), so it rides along as an extra
 	// attribute rather than always being present. The dashboard surfaces
@@ -1915,6 +2039,37 @@ func (w *Watcher) tickWatch(ctx context.Context) error {
 			w.setState(ctx, StatePickCampaign)
 			return nil
 		}
+	}
+
+	// Priority preemption: this point is only reached on heartbeat /
+	// inventory ticks (intermediate ticks return early above), so the
+	// re-discovery below runs at most once per HeartbeatInterval (~1/min)
+	// and adds no per-tick API calls. When another eligible campaign now
+	// outranks the one being mined, yield the watch back to PickCampaign
+	// so the higher-priority drop takes the slot. Discovery failures keep
+	// the current watch — we never preempt on error. If the current
+	// campaign itself is no longer eligible (expired/fully claimed) it
+	// simply won't be the top candidate and we preempt away from it.
+	if top, perr := w.topPreemptCandidate(ctx, progress); perr != nil {
+		slog.Warn("watcher preemption re-discovery failed; keeping current watch",
+			"kind", "error", "account", w.cfg.AccountID, "err", perr)
+	} else if top != nil && top.ID != campaign.ID {
+		slog.Info("watcher priority preempt",
+			"kind", "state",
+			"account", w.cfg.AccountID,
+			"from_campaign", campaign.Name,
+			"from_game", campaign.Game,
+			"to_campaign", top.Name,
+			"to_game", top.Game,
+			"reason", "priority-preempt",
+			"mode", w.cfg.PriorityMode)
+		// stopCurrentWatch mirrors the channel-offline path (StopWatch +
+		// unsubscribe) and also clears the per-watch handle/stream.
+		// currentCampaign/currentBenefit are intentionally KEPT —
+		// pickCampaign overwrites them with the preempting drop.
+		w.stopCurrentWatch(ctx)
+		w.setState(ctx, StatePickCampaign)
+		return nil
 	}
 
 	w.mu.Lock()
